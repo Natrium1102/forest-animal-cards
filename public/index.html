@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>森林动物卡牌对战</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  :root {
+    --gold:#e8c268; --leaf:#7bc46d; --leaf-deep:#3e7d46;
+    --cream:#f3ead5; --red:#e06a5a; --ink:#1d2b1f;
+  }
+  body {
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    color:var(--cream); min-height:100vh; user-select:none;
+    background:
+      radial-gradient(ellipse at 50% -10%, #2a4d33 0%, transparent 55%),
+      radial-gradient(ellipse at 85% 110%, #1e3a26 0%, transparent 50%),
+      linear-gradient(180deg,#14281a 0%,#0c1a11 100%);
+    background-attachment:fixed;
+  }
+  /* 森林远景剪影（纯 CSS） */
+  body::before {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.5;
+    background:
+      radial-gradient(circle at 12% 88%, #1a3320 0 18px, transparent 19px),
+      radial-gradient(circle at 22% 90%, #16301d 0 26px, transparent 27px),
+      radial-gradient(circle at 78% 89%, #1a3320 0 22px, transparent 23px),
+      radial-gradient(circle at 90% 92%, #16301d 0 30px, transparent 31px),
+      linear-gradient(180deg, transparent 70%, rgba(8,20,12,.7) 100%);
+  }
+  .screen { display:none; min-height:100vh; position:relative; z-index:1; }
+  .screen.active { display:flex; }
+
+  /* ================= 主菜单 ================= */
+  #screen-menu { flex-direction:column; align-items:center; justify-content:center; padding:28px 16px; gap:14px; }
+  .logo { text-align:center; margin-bottom:6px; }
+  .logo h1 { font-size:clamp(28px,6vw,44px); font-weight:900; letter-spacing:6px;
+    background:linear-gradient(135deg,#bde8a8,var(--gold)); -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent; filter:drop-shadow(0 3px 14px rgba(123,196,109,.35)); }
+  .logo .sub { margin-top:8px; color:#9db89e; font-size:13px; letter-spacing:5px; }
+  .card-panel { width:min(440px,94vw); background:rgba(20,38,25,.82); backdrop-filter:blur(6px);
+    border:1px solid rgba(232,194,104,.28); border-radius:18px; padding:22px; box-shadow:0 18px 50px rgba(0,0,0,.45); }
+  .field { margin-bottom:14px; }
+  .field label { display:block; font-size:13px; color:#a9c3a8; margin-bottom:6px; letter-spacing:2px; }
+  .field input { width:100%; height:46px; border-radius:11px; border:1px solid rgba(255,255,255,.14);
+    background:rgba(8,18,11,.6); color:var(--cream); font-size:16px; padding:0 14px; outline:none; }
+  .field input:focus { border-color:var(--leaf); box-shadow:0 0 0 3px rgba(123,196,109,.18); }
+  .field input.code { letter-spacing:8px; font-size:20px; font-weight:700; text-align:center; }
+  .divider { display:flex; align-items:center; gap:10px; color:#6f8c72; font-size:12px; letter-spacing:3px; margin:16px 0 14px; }
+  .divider::before,.divider::after { content:''; flex:1; height:1px; background:rgba(255,255,255,.1); }
+  .btn { cursor:pointer; border:none; outline:none; border-radius:12px; font-family:inherit;
+    font-size:16px; font-weight:800; letter-spacing:3px; padding:13px 18px; width:100%;
+    transition:transform .12s, filter .12s, opacity .12s; }
+  .btn:active { transform:scale(.97); }
+  .btn-leaf { color:#16301b; background:linear-gradient(135deg,#93d984,#57a95f); box-shadow:0 6px 18px rgba(87,169,95,.35); }
+  .btn-gold { color:#3a2a07; background:linear-gradient(135deg,#f2d78f,#d9ac4e); box-shadow:0 6px 18px rgba(217,172,78,.3); }
+  .btn-ghost { color:#cfe0cc; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.16); }
+  .btn[disabled] { opacity:.4; cursor:not-allowed; }
+  .btn-row { display:flex; gap:10px; }
+  .menu-rules { margin-top:14px; font-size:12px; line-height:1.9; color:#85a187; text-align:center; letter-spacing:.5px; }
+  .menu-rules b { color:#bfe0b8; }
+
+  /* ================= 大厅 ================= */
+  #screen-lobby { flex-direction:column; align-items:center; justify-content:center; padding:28px 16px; }
+  .lobby-card { width:min(560px,94vw); background:rgba(20,38,25,.86); backdrop-filter:blur(6px);
+    border:1px solid rgba(232,194,104,.3); border-radius:18px; padding:24px; box-shadow:0 18px 50px rgba(0,0,0,.45); }
+  .lobby-title { text-align:center; font-size:15px; color:#a9c3a8; letter-spacing:4px; }
+  .code-row { display:flex; align-items:center; justify-content:center; gap:12px; margin:12px 0 4px; }
+  .room-code { font-size:44px; font-weight:900; letter-spacing:10px; color:var(--gold); text-shadow:0 0 22px rgba(232,194,104,.4); }
+  .copy-btn { border:1px solid rgba(232,194,104,.4); background:transparent; color:var(--gold);
+    border-radius:9px; padding:7px 12px; font-size:12px; cursor:pointer; letter-spacing:2px; }
+  .share-hint { text-align:center; font-size:12px; color:#7e9a80; margin-bottom:14px; }
+  .invite-row { display:flex; align-items:center; gap:8px; margin:2px 0 8px; }
+  .invite-row input { flex:1; min-width:0; height:36px; border-radius:9px; border:1px solid rgba(123,196,109,.35);
+    background:rgba(8,18,11,.6); color:#bfe8b4; font-size:12px; padding:0 10px; outline:none; }
+  .seats { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px; }
+  .seat { border-radius:13px; padding:12px 14px; min-height:72px; border:1px solid rgba(255,255,255,.1);
+    background:rgba(8,18,11,.45); display:flex; flex-direction:column; justify-content:center; gap:5px; }
+  .seat.filled { border-color:rgba(123,196,109,.45); background:rgba(62,125,70,.16); }
+  .seat.team-b { border-color:rgba(154,111,224,.45); background:rgba(80,50,120,.16); }
+  .seat .who { font-size:16px; font-weight:800; display:flex; align-items:center; gap:6px; }
+  .team-dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .seat .tags { display:flex; gap:6px; flex-wrap:wrap; }
+  .tag { font-size:10px; font-weight:700; padding:2px 7px; border-radius:99px; }
+  .tag-host { background:var(--gold); color:#3a2a07; }
+  .tag-me { background:#7bc46d; color:#143018; }
+  .tag-ai { background:#b48be0; color:#2c1547; }
+  .tag-offline { background:#666; color:#ddd; }
+  .seat .empty { color:#5f7a62; font-size:14px; text-align:center; letter-spacing:3px; }
+  .lobby-hint { text-align:center; font-size:13px; color:#9db89e; margin:12px 0 14px; min-height:20px; }
+  .lobby-actions { display:flex; flex-direction:column; gap:10px; }
+  .room-log { max-height:90px; overflow-y:auto; border-radius:10px; background:rgba(6,14,9,.5);
+    border:1px solid rgba(255,255,255,.08); padding:8px 11px; font-size:11px; line-height:1.7; color:#85a187; }
+  .room-log .ev-join { color:#9fd890; }
+  .room-log .ev-leave { color:#c9a5a0; }
+  .room-log .ev-ai_takeover { color:#d9b8ff; }
+
+  /* ================= 对战页 ================= */
+  #screen-game { flex-direction:column; align-items:center; padding:8px 8px 12px; gap:6px; }
+  .game-top { width:min(1060px,100%); display:flex; align-items:center; justify-content:space-between; padding:0 4px; gap:8px; }
+  .top-left { display:flex; gap:8px; align-items:center; }
+  .icon-btn { cursor:pointer; border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.06);
+    color:#d7e6d4; border-radius:9px; padding:7px 12px; font-size:13px; font-weight:700; letter-spacing:1px; }
+  .turn-banner { font-size:15px; font-weight:800; letter-spacing:2px; padding:6px 16px; border-radius:99px;
+    background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14); white-space:nowrap; }
+  .turn-banner.mine { color:#ffe9a8; border-color:rgba(232,194,104,.55); background:rgba(217,172,78,.18); }
+  .turn-banner.foe { color:#a9c3a8; }
+
+  .arena { width:min(1060px,100%); display:flex; gap:10px; }
+  .arena-main { flex:1; display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .player-list { width:120px; flex:0 0 120px; display:flex; flex-direction:column; gap:6px; }
+  .pl-card { border-radius:10px; padding:8px; background:rgba(10,24,15,.6); border:1px solid rgba(255,255,255,.1); font-size:11px; }
+  .pl-card.mine { border-color:rgba(123,196,109,.4); }
+  .pl-card.active { box-shadow:0 0 0 2px rgba(232,194,104,.5); }
+  .pl-card .pl-name { font-weight:800; font-size:13px; display:flex; align-items:center; gap:5px; }
+  .pl-card .pl-meta { color:#85a187; margin-top:3px; line-height:1.5; }
+
+  /* 英雄条 */
+  .hero-strip { display:flex; align-items:center; gap:12px; padding:8px 14px; border-radius:14px;
+    background:rgba(10,24,15,.62); border:1px solid rgba(255,255,255,.1); position:relative; }
+  .hero-strip.targetable { border-color:#ff8a7a; box-shadow:0 0 0 3px rgba(224,106,90,.35); cursor:crosshair; }
+  .hero-name { font-size:16px; font-weight:800; min-width:110px; display:flex; align-items:center; gap:5px; }
+  .hero-name .ai-flag { font-size:11px; color:#c9a5ec; font-weight:700; }
+  .energy-box { display:flex; align-items:baseline; gap:4px; position:relative; }
+  .energy-num { font-size:30px; font-weight:900; color:#9fe89a; text-shadow:0 0 16px rgba(120,220,110,.4); font-variant-numeric:tabular-nums; }
+  .energy-cap { font-size:12px; color:#85a187; }
+  .ap-pips { display:flex; gap:3px; flex-wrap:wrap; max-width:180px; }
+  .pip { width:12px; height:12px; border-radius:3px; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.18); transform:rotate(45deg); }
+  .pip.on { background:linear-gradient(135deg,#9ad6ff,#5aa0e0); border-color:#bfe6ff; box-shadow:0 0 8px rgba(90,160,224,.6); }
+  .hero-meta { margin-left:auto; display:flex; align-items:center; gap:12px; font-size:12px; color:#9db89e; }
+  .color-dots { display:flex; gap:5px; }
+  .cdot { width:13px; height:13px; border-radius:50%; border:2px solid rgba(255,255,255,.25); background:rgba(255,255,255,.08); }
+  .cdot.on { border-color:rgba(255,255,255,.8); transform:scale(1.1); }
+  .mini-count { white-space:nowrap; }
+
+  /* 战场格子 */
+  .board-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .slot { position:relative; min-height:104px; border-radius:13px; border:2px dashed rgba(255,255,255,.16);
+    background:rgba(255,255,255,.025); display:flex; align-items:center; justify-content:center; transition:box-shadow .12s,border-color .12s; }
+  .slot.occupied { border-style:solid; border-color:rgba(255,255,255,.12); background:rgba(8,18,11,.4); }
+  .slot.drop-here { border-color:var(--gold); box-shadow:0 0 0 3px rgba(232,194,104,.28) inset; background:rgba(232,194,104,.08); cursor:pointer; }
+  .slot.move-here { border-color:#7fd8ff; box-shadow:0 0 0 3px rgba(127,216,255,.35) inset; background:rgba(127,216,255,.1); }
+  .slot .row-tag { position:absolute; top:3px; left:7px; font-size:10px; color:#5f7a62; letter-spacing:2px; }
+
+  /* 场上动物 */
+  .animal { position:relative; width:100%; height:100%; min-height:100px; border-radius:11px; padding:6px 8px 5px;
+    cursor:default; background:linear-gradient(160deg,rgba(255,255,255,.12),rgba(255,255,255,.04));
+    border:2px solid var(--c,#777); display:flex; flex-direction:column; align-items:center; }
+  .animal.mine.ready { cursor:pointer; }
+  .animal.mine.movable { cursor:grab; }
+  .animal.mine.movable:active { cursor:grabbing; }
+  .animal.ready { box-shadow:0 0 0 2px rgba(123,196,109,.55), 0 0 16px rgba(123,196,109,.3); }
+  .animal.selected { box-shadow:0 0 0 3px var(--gold), 0 0 22px rgba(232,194,104,.7); }
+  .animal.targetable { box-shadow:0 0 0 3px #ff8a7a, 0 0 18px rgba(224,106,90,.55); cursor:crosshair; animation:pulseTarget 1s infinite; }
+  @keyframes pulseTarget { 50% { box-shadow:0 0 0 4px rgba(224,106,90,.4), 0 0 26px rgba(224,106,90,.8); } }
+  .animal .emoji { font-size:38px; line-height:1.1; filter:drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+  .animal .an-name { font-size:13px; font-weight:800; margin-top:1px; }
+  .animal .an-ability { font-size:9px; color:#cdd9c9; line-height:1.2; text-align:center; max-height:22px; overflow:hidden; }
+  .animal .gem { position:absolute; top:4px; right:5px; width:9px; height:9px; border-radius:50%; border:1.5px solid rgba(255,255,255,.75); }
+  .animal .atk-def { position:absolute; bottom:4px; left:6px; right:6px; display:flex; justify-content:space-between; font-weight:900; font-size:15px; }
+  .animal .v-atk { color:#ffb3a7; text-shadow:0 1px 3px rgba(0,0,0,.8); }
+  .animal .v-def { color:#a9d8ff; text-shadow:0 1px 3px rgba(0,0,0,.8); }
+  .animal .v-def.buffed { color:#c9f5b0; }
+  .animal .acts { position:absolute; top:3px; left:6px; display:flex; gap:2px; }
+  .act-dot { width:6px; height:6px; border-radius:50%; background:#ffe08a; box-shadow:0 0 5px rgba(255,224,138,.8); }
+  .act-dot.spent { background:rgba(255,255,255,.2); box-shadow:none; }
+  .animal .dmg-chip { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    font-size:22px; font-weight:900; color:#ff6a5a; text-shadow:0 0 8px rgba(0,0,0,.9); pointer-events:none; }
+  /* 入场翻转动画 */
+  .animal.play-anim { animation:flipIn .5s ease; }
+  @keyframes flipIn { 0% { transform:rotateY(90deg) scale(.8); opacity:0; } 100% { transform:rotateY(0) scale(1); opacity:1; } }
+  /* 受击抖动 */
+  .animal.hit-anim { animation:hitShake .35s ease; }
+  @keyframes hitShake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-5px);} 75%{transform:translateX(5px);} }
+  /* 能量飘字 */
+  .float-text { position:absolute; pointer-events:none; font-weight:900; font-size:22px; z-index:50;
+    text-shadow:0 2px 6px rgba(0,0,0,.9); animation:floatUp 1.1s ease-out forwards; }
+  @keyframes floatUp { 0%{transform:translateY(0);opacity:1;} 100%{transform:translateY(-50px);opacity:0;} }
+
+  /* 中央条 */
+  .center-strip { display:flex; align-items:stretch; gap:10px; }
+  .ap-meter { flex:0 0 86px; display:flex; align-items:center; justify-content:center; gap:5px; border-radius:12px;
+    background:rgba(10,24,15,.62); border:1px solid rgba(255,255,255,.12); transition:border-color .15s, box-shadow .15s; }
+  .ap-meter.active { border-color:rgba(154,214,255,.55); box-shadow:0 0 14px rgba(90,160,224,.3); }
+  .ap-meter-num { font-size:26px; font-weight:900; color:#9ad6ff; text-shadow:0 0 12px rgba(90,160,224,.5); font-variant-numeric:tabular-nums; }
+  .ap-meter-label { font-size:9px; color:#85a187; line-height:1.35; letter-spacing:1px; }
+  .end-btn { flex:0 0 150px; cursor:pointer; border:none; border-radius:13px; font-family:inherit;
+    font-size:17px; font-weight:900; letter-spacing:4px; color:#2b2108;
+    background:linear-gradient(135deg,#ffe29a,#e2a93f); box-shadow:0 5px 16px rgba(217,172,78,.35); }
+  .end-btn:active { transform:scale(.97); }
+  .end-btn[disabled] { opacity:.45; cursor:not-allowed; filter:grayscale(.5); }
+  .log-box { flex:1; min-height:58px; max-height:84px; overflow-y:auto; border-radius:12px;
+    background:rgba(6,14,9,.6); border:1px solid rgba(255,255,255,.09); padding:7px 11px; font-size:12px; line-height:1.65; color:#b9cfb6; }
+  .log-box .lg-turn { color:#ffe08a; font-weight:700; }
+  .log-box .lg-play { color:#bfe8b4; }
+  .log-box .lg-attack { color:#ffc2a0; }
+  .log-box .lg-ability { color:#d9b8ff; }
+  .log-box .lg-death { color:#e8908a; }
+  .log-box .lg-undo { color:#9fd8ff; }
+  .log-box .lg-move { color:#cfe8b0; }
+  .log-box .lg-intel { color:#8fd6e8; }
+  .intel-card {
+    display:inline-flex; align-items:center; gap:6px; margin-top:6px; padding:6px 10px;
+    background:linear-gradient(145deg, var(--tc), #1a2a1f);
+    border:1.5px solid var(--tc); border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,.5);
+  }
+  .intel-card .ic-cost {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:22px; height:22px; border-radius:50%; background:#1a1a1a; color:#ffd86b;
+    font-weight:800; font-size:13px; border:1.5px solid #ffd86b;
+  }
+  .intel-card .ic-emoji { font-size:24px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+  .intel-card .ic-name { color:#fff; font-weight:700; font-size:14px; }
+  .intel-card .ic-stats { color:#cfe; font-size:12px; background:rgba(0,0,0,.35); padding:1px 6px; border-radius:6px; }
+
+  /* 手牌 */
+  .hand-wrap { width:100%; display:flex; flex-direction:column; align-items:center; gap:4px; margin-top:2px; position:relative; }
+  .hand-hint { font-size:11px; color:#7e9a80; letter-spacing:2px; }
+  .hand { display:flex; gap:8px; justify-content:center; flex-wrap:nowrap; overflow-x:auto; width:100%; padding:6px 4px 8px; }
+  .hand.drop-target { box-shadow:0 0 0 2px rgba(255,140,120,.7) inset; border-radius:12px; background:rgba(224,106,90,.1); }
+  .hcard { position:relative; flex:0 0 92px; width:92px; height:148px; border-radius:12px; border:2px solid #6f8c6a;
+    overflow:hidden; cursor:pointer; background:linear-gradient(180deg,#22342a,#16241a); transition:transform .12s,box-shadow .12s,opacity .12s; }
+  .hcard.playable:hover { transform:translateY(-7px); }
+  .hcard.playable { border-color:#8fbf7d; box-shadow:0 4px 14px rgba(0,0,0,.4); touch-action:none; cursor:grab; }
+  .hcard.playable:active { cursor:grabbing; }
+  .hcard.selected { border-color:var(--gold); box-shadow:0 0 0 3px rgba(232,194,104,.5), 0 0 22px rgba(232,194,104,.55); transform:translateY(-9px); }
+  .hcard.unplayable { opacity:.5; cursor:not-allowed; }
+  .drag-ghost { position:fixed; z-index:100; pointer-events:none; opacity:.88; transform:scale(1.06) rotate(-3deg); box-shadow:0 14px 34px rgba(0,0,0,.65); }
+  .slot.drag-over { border-color:var(--gold) !important; box-shadow:0 0 0 3px rgba(232,194,104,.45) inset, 0 0 22px rgba(232,194,104,.55); background:rgba(232,194,104,.14); }
+  .hcard .cost { position:absolute; top:4px; left:5px; z-index:2; width:22px; height:22px; border-radius:50%;
+    background:linear-gradient(135deg,#7fc4ff,#2f6fb8); border:2px solid #d7ecff; color:#fff; font-weight:900; font-size:13px;
+    display:flex; align-items:center; justify-content:center; text-shadow:0 1px 2px rgba(0,0,0,.6); }
+  .hcard .cost.reduced { background:linear-gradient(135deg,#8fe6a0,#37a14e); border-color:#d9ffe0; }
+  .hcard .cost .base { position:absolute; top:-7px; right:-5px; font-size:9px; color:#9fb8a0; text-decoration:line-through; text-shadow:none; }
+  .hcard .gem { position:absolute; top:6px; right:6px; z-index:2; width:11px; height:11px; border-radius:50%; border:1.5px solid rgba(255,255,255,.8); }
+  .hcard .art { height:74px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border-bottom:1px solid rgba(255,255,255,.14); }
+  .hcard .art .emoji { font-size:38px; filter:drop-shadow(0 2px 4px rgba(0,0,0,.6)); }
+  .hcard .art .nm { font-size:13px; font-weight:800; }
+  .hcard .skill { padding:4px 6px; font-size:9.5px; line-height:1.25; color:#d8e4d4; height:44px; overflow:hidden; }
+  .hcard .skill b { color:#e8c268; display:block; font-size:10px; }
+  .hcard .stats { position:absolute; bottom:3px; left:7px; right:7px; display:flex; justify-content:space-between; font-weight:900; font-size:15px; text-shadow:0 1px 3px rgba(0,0,0,.9); }
+  .hcard .stats .s-atk { color:#ffb3a7; }
+  .hcard .stats .s-def { color:#a9d8ff; }
+
+  /* 结算层 */
+  .result-layer { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(7,15,10,.78); backdrop-filter:blur(3px); z-index:20; }
+  .result-layer.show { display:flex; animation:fadeIn .4s ease; }
+  @keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
+  .result-box { text-align:center; background:rgba(18,36,24,.96); border:1px solid rgba(232,194,104,.4); border-radius:18px;
+    padding:30px 38px; box-shadow:0 18px 60px rgba(0,0,0,.6); min-width:280px; animation:popIn .5s cubic-bezier(.2,1.3,.4,1); }
+  @keyframes popIn { from{transform:scale(.7);opacity:0;} to{transform:scale(1);opacity:1;} }
+  .result-verdict { font-size:44px; font-weight:900; letter-spacing:10px; margin-bottom:8px; }
+  .result-verdict.win { color:var(--gold); text-shadow:0 0 30px rgba(232,194,104,.6); }
+  .result-verdict.lose { color:#e08a7c; }
+  .result-verdict.draw { color:#9db89e; }
+  .result-detail { color:#b9cfb6; font-size:14px; margin-bottom:22px; }
+  .result-box .btn { margin-bottom:10px; }
+
+  /* 规则面板 */
+  .modal-layer { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(5,12,8,.82); backdrop-filter:blur(4px); z-index:30; }
+  .modal-layer.show { display:flex; }
+  .modal { width:min(680px,94vw); max-height:86vh; overflow-y:auto; background:rgba(18,34,24,.98);
+    border:1px solid rgba(232,194,104,.35); border-radius:18px; padding:26px 28px; box-shadow:0 20px 60px rgba(0,0,0,.6); }
+  .modal h2 { font-size:22px; color:var(--gold); letter-spacing:4px; margin-bottom:6px; text-align:center; }
+  .modal .m-sub { text-align:center; color:#85a187; font-size:12px; letter-spacing:3px; margin-bottom:18px; }
+  .modal h3 { font-size:15px; color:#bfe8b4; margin:16px 0 8px; letter-spacing:2px; border-left:3px solid var(--leaf); padding-left:10px; }
+  .modal p, .modal li { font-size:13px; line-height:1.85; color:#cfe0cc; }
+  .modal ul { padding-left:20px; }
+  .modal .close-x { position:absolute; top:14px; right:18px; cursor:pointer; font-size:22px; color:#85a187; background:none; border:none; }
+  .ability-table { width:100%; border-collapse:collapse; margin-top:6px; font-size:12px; }
+  .ability-table th, .ability-table td { border:1px solid rgba(255,255,255,.12); padding:6px 8px; text-align:left; }
+  .ability-table th { background:rgba(123,196,109,.15); color:#bfe8b4; letter-spacing:1px; }
+  .ability-table td { color:#d8e4d4; }
+  .ability-table .at-name { font-weight:800; white-space:nowrap; }
+
+  #toast { position:fixed; left:50%; bottom:40px; transform:translateX(-50%) translateY(20px);
+    background:rgba(20,30,22,.97); border:1px solid rgba(224,106,90,.55); color:#ffd7d2;
+    padding:12px 22px; border-radius:12px; font-size:14px; opacity:0; pointer-events:none;
+    transition:opacity .25s, transform .25s; z-index:99; max-width:88vw; text-align:center; }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  @media (max-width:720px) {
+    .player-list { display:none; }
+    .hero-name { min-width:70px; font-size:14px; }
+    .ap-pips { max-width:110px; }
+    /* 手机端紧凑布局 */
+    #screen-game { padding:6px 4px 8px; gap:4px; }
+    .arena { gap:6px; }
+    .board-row { gap:6px; }
+    .slot { min-height:86px; border-radius:10px; }
+    .slot .row-tag { font-size:8px; }
+    .animal { min-height:82px; padding:4px 5px; }
+    .animal .emoji { font-size:28px; }
+    .animal .an-name { font-size:11px; }
+    .animal .an-ability { display:none; }
+    .animal .atk-def { font-size:13px; }
+    .animal.mine.movable { touch-action:none; }
+    .hcard { flex:0 0 74px; width:74px; height:120px; border-radius:10px; }
+    .hcard .art { height:56px; }
+    .hcard .art .emoji { font-size:28px; }
+    .hcard .art .nm { font-size:11px; }
+    .hcard .skill { font-size:8px; height:34px; padding:2px 4px; }
+    .hcard .skill b { font-size:8.5px; }
+    .hcard .stats { font-size:12px; }
+    .hcard .cost { width:19px; height:19px; font-size:11px; }
+    .center-strip { gap:6px; }
+    .end-btn { flex:0 0 92px; font-size:13px; letter-spacing:2px; }
+    .ap-meter { flex:0 0 64px; }
+    .ap-meter-num { font-size:20px; }
+    .turn-banner { font-size:12px; padding:5px 10px; letter-spacing:1px; }
+    .icon-btn { padding:6px 8px; font-size:12px; }
+    .energy-num { font-size:22px; }
+    .energy-cap { font-size:10px; }
+    .hero-strip { padding:6px 10px; gap:8px; }
+    .log-box { font-size:11px; max-height:64px; min-height:48px; padding:5px 8px; }
+    .hand { gap:5px; }
+    .hand-hint { font-size:10px; letter-spacing:1px; }
+    .room-code { font-size:34px; letter-spacing:6px; }
+    .seats { grid-template-columns:1fr 1fr; gap:8px; }
+    .float-text { font-size:17px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= 主菜单 ================= -->
+<section id="screen-menu" class="screen active">
+  <div class="logo">
+    <h1>森林动物卡牌对战</h1>
+    <div class="sub">FOREST · ANIMAL · CARDS</div>
+  </div>
+  <div class="card-panel">
+    <div class="field">
+      <label>你的昵称</label>
+      <input id="menuNick" maxlength="10" placeholder="输入昵称（最多 10 个字）">
+    </div>
+    <button class="btn btn-leaf" id="btnAI">VS AI 单机对战</button>
+    <div class="divider">在线联机</div>
+    <div class="btn-row" style="margin-bottom:10px">
+      <button class="btn btn-gold" data-cap="2">创建 2 人房</button>
+      <button class="btn btn-gold" data-cap="4">创建 4 人房</button>
+    </div>
+    <div class="field" style="margin-bottom:10px">
+      <label>房间码加入</label>
+      <input id="menuCode" class="code" maxlength="6" inputmode="numeric" placeholder="6 位房间码">
+    </div>
+    <button class="btn btn-ghost" id="btnJoin">加入房间</button>
+    <div class="menu-rules">
+      双方各 <b>40 点森林能量</b>，归零即败；先集齐 <b>3 种领地色</b> 动物也获胜<br>
+      每回合 <b>摸2张</b>（手牌上限8），行动点够可<b>连续出多张</b><br>
+      本回合刚出的牌可<b>拖回手牌撤销</b>或<b>拖拽换位</b>
+    </div>
+    <button class="btn btn-ghost" id="btnMenuRules" style="margin-top:10px">📖 查看完整规则</button>
+  </div>
+</section>
+
+<!-- ================= 房间大厅 ================= -->
+<section id="screen-lobby" class="screen">
+  <div class="lobby-card">
+    <div class="lobby-title">房间码（发给朋友即可加入）</div>
+    <div class="code-row">
+      <span class="room-code" id="lobbyCode">------</span>
+      <button class="copy-btn" id="btnCopy">复制</button>
+    </div>
+    <div class="invite-row">
+      <input id="inviteLink" readonly title="朋友点开链接即可自动加入房间">
+      <button class="copy-btn" id="btnCopyLink">复制链接</button>
+    </div>
+    <div class="share-hint" id="lobbyCapacity">2 人房</div>
+    <div class="seats" id="seats"></div>
+    <div class="lobby-hint" id="lobbyHint"></div>
+    <div class="room-log" id="roomLog"></div>
+    <div class="lobby-actions" style="margin-top:12px">
+      <button class="btn btn-leaf" id="btnStart">开始游戏</button>
+      <button class="btn btn-ghost" id="btnLeaveLobby">离开房间</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 对战页 ================= -->
+<section id="screen-game" class="screen">
+  <div class="game-top">
+    <div class="top-left">
+      <button class="icon-btn" id="btnRules">📖 规则</button>
+      <div class="turn-banner" id="turnBanner">第 1 回合</div>
+    </div>
+    <button class="quit-btn icon-btn" id="btnQuit">离开对局</button>
+  </div>
+
+  <div class="arena" id="arena">
+    <div class="arena-main">
+      <div class="hero-strip" id="foeHero"></div>
+      <div class="board-row" id="foeBack"></div>
+      <div class="board-row" id="foeFront"></div>
+
+      <div class="center-strip">
+        <button class="end-btn" id="btnEnd">结束回合</button>
+        <div class="ap-meter" id="apMeter" title="你本回合剩余的行动点（费）">
+          <span class="ap-meter-num" id="apNow">0</span>
+          <span class="ap-meter-label">剩余<br>行动点</span>
+        </div>
+        <div class="log-box" id="logBox"></div>
+      </div>
+
+      <div class="board-row" id="myFront"></div>
+      <div class="board-row" id="myBack"></div>
+      <div class="hero-strip" id="myHero"></div>
+
+      <div class="hand-wrap">
+        <div class="hand" id="hand"></div>
+        <div class="hand-hint" id="handHint"></div>
+      </div>
+    </div>
+    <div class="player-list" id="playerList"></div>
+  </div>
+</section>
+
+<div class="result-layer" id="resultLayer">
+  <div class="result-box">
+    <div class="result-verdict" id="resultVerdict">胜利</div>
+    <div class="result-detail" id="resultDetail"></div>
+    <button class="btn btn-gold" id="btnAgain">再来一局</button>
+    <button class="btn btn-ghost" id="btnResultMenu">返回主菜单</button>
+  </div>
+</div>
+
+<!-- 规则弹窗 -->
+<div class="modal-layer" id="rulesLayer">
+  <div class="modal">
+    <button class="close-x" id="btnRulesClose">×</button>
+    <h2>森林动物 · 对战规则</h2>
+    <div class="m-sub">RULES · 胜利条件 / 回合流程 / 8 种动物能力</div>
+
+    <h3>一、胜利条件（满足其一即胜）</h3>
+    <ul>
+      <li><b>能量胜利</b>：将对方队伍的 <b>森林能量降至 0</b>（双方初始均为 40 点）。</li>
+      <li><b>领地胜利</b>：在己方战场上同时拥有 <b>3 种不同领地色</b> 的动物（林地 / 原野 / 水域 / 天空 中任意 3 种），达成立即获胜。</li>
+      <li><b>平局判定</b>：打满 40 回合仍未分出胜负，按 <b>剩余森林能量</b> 裁决，能量高者胜；能量相同则平局。</li>
+    </ul>
+
+    <h3>二、回合流程</h3>
+    <ol>
+      <li><b>回合开始</b>：获得 <b>行动点 = min(本方回合数, 10)</b>（第 1 回合 1 点，第 2 回合 2 点……第 10 回合起固定 10 点），并摸 <b>2 张牌</b>（手牌上限 8 张，超出的牌直接弃掉）。<b>双方初始手牌均为 6 张</b>（含 AI），先手第 1 回合不再额外摸牌。</li>
+      <li><b>出牌</b>：只要行动点足够，<b>一回合内可连续打出任意多张牌</b>；每张牌消耗其左上角标注的费用，行动点不足则无法打出。</li>
+      <li><b>攻击</b>：点击己方一只动物选中，再点击对方一只动物发起攻击。<b>由你决定用哪只动物打对方的哪只动物</b>。每只动物每回合默认可攻击 1 次（狼/松鼠可攻击 2 次）。<b>动物一旦发起攻击，立即被锁定在出牌槽中</b>，不能再收回手牌或换位，之后一直留在战场作战，直到生命值归零后离开战场。</li>
+      <li><b>攻击顺序限制</b>：普通动物只能攻击对方<b>前排</b>；对方前排被清空后，才能攻击对方<b>后排</b>。<b>老鹰例外</b>：可越过前排直接攻击后排任意动物。</li>
+      <li><b>反击（重要）</b>：攻击时，<b>只有被攻击的那一只动物会反击</b>（用它自己的攻击力还击），其它动物不参与反击。反击伤害在攻击结算时同时扣除。因此：若对方动物攻击力高于你派出的攻击者，<b>你的攻击者可能被反击打死</b>。双方同时死亡时，攻击方造成的伤害仍然生效。</li>
+      <li><b>结束回合</b>：点「结束回合」按钮，轮到对方行动。</li>
+    </ol>
+
+    <h3>三、撤销与换位（仅本回合刚出的牌）</h3>
+    <ul>
+      <li>本回合刚打出、尚未参与攻击的动物，可 <b>拖拽回手牌区</b> 撤销出牌，<b>全额返还行动点</b>。</li>
+      <li>本回合刚打出的动物，可 <b>拖拽到己方其它空格</b> 调整前后排位置。</li>
+      <li>一旦动物<b>参与过攻击</b>，或回合结束后，该动物<b>锁定</b>：无法撤销、无法换位，一直占据当前格位作战，<b>直到生命值归零后直接离开战场</b>。</li>
+    </ul>
+
+    <h3>四、8 种动物能力</h3>
+    <table class="ability-table">
+      <thead><tr><th>动物</th><th>领地</th><th>费/攻/防</th><th>能力</th><th>详细说明</th></tr></thead>
+      <tbody>
+        <tr><td class="at-name">🐺 狼</td><td>林地</td><td>4 / 6 / 4</td><td>狼群突袭</td><td>入场当回合可<b>额外攻击 1 次</b>（共 2 次）</td></tr>
+        <tr><td class="at-name">🐻 熊</td><td>林地</td><td>6 / 8 / 5</td><td>蛮力</td><td>入场时从对方场上<b>随机夺走 1 只动物</b>归己方（对方动物直接消失）</td></tr>
+        <tr><td class="at-name">🦉 猫头鹰</td><td>天空</td><td>3 / 4 / 3</td><td>夜视</td><td>入场时<b>随机偷看对方 1 张手牌</b>，以卡牌形式展示给你看</td></tr>
+        <tr><td class="at-name">🦊 狐狸</td><td>原野</td><td>2 / 3 / 3</td><td>狡诈</td><td>入场时与对方<b>随机交换 1 张手牌</b></td></tr>
+        <tr><td class="at-name">🐿️ 松鼠</td><td>原野</td><td>1 / 2 / 2</td><td>迅捷</td><td>入场当回合可<b>攻击 2 次</b></td></tr>
+        <tr><td class="at-name">🦌 鹿</td><td>林地</td><td>4 / 5 / 4</td><td>守护</td><td>与鹿<b>同排相邻</b>的己方动物<b>防御力 +2</b>（鹿本身不享受）</td></tr>
+        <tr><td class="at-name">🐸 青蛙</td><td>水域</td><td>2 / 3 / 4</td><td>跳跃</td><td>你场上每有 1 只青蛙，你<b>所有手牌的出牌费用 -1</b>。<b>可叠加</b>：2 只青蛙 -2，3 只 -3，以此类推（费用最低降到 0，不会为负）</td></tr>
+        <tr><td class="at-name">🦅 老鹰</td><td>天空</td><td>4 / 6 / 3</td><td>俯冲</td><td>攻击时<b>无视前排限制</b>，可直接攻击对方后排任意动物</td></tr>
+      </tbody>
+    </table>
+
+    <h3>五、联机模式</h3>
+    <ul>
+      <li>支持 <b>2 人 1v1</b> 与 <b>4 人 2v2</b>（同队共享战场、手牌与能量）。</li>
+      <li>房主可复制<b>邀请链接</b>发给朋友，朋友用手机或电脑点开链接即自动加入房间，无需手动输入房间码。</li>
+      <li>人不够时，空位由电脑自动补位；玩家掉线后由电脑托管继续对局。</li>
+    </ul>
+
+    <h3>六、界面图标说明</h3>
+    <ul>
+      <li>🃏 <b>手牌数量</b>：该玩家当前手里握着的牌数。</li>
+      <li>📚 <b>牌堆剩余</b>：该玩家牌堆里还没摸到的牌数。</li>
+      <li>⚡ <b>AP 行动点（费）</b>：本回合剩余的可用费用，出牌消耗它；「结束回合」旁的大数字就是你的实时费余量。</li>
+      <li>⚔ <b>攻击力</b>：攻击时造成的伤害，也是反击时还击的伤害。</li>
+      <li>🛡 <b>防御/生命</b>：动物剩余生命值，归零即离场。</li>
+      <li>卡牌右上角的<b>彩色圆点</b> = 领地色（绿=林地、黄=原野、蓝=水域、紫=天空），集齐 3 种即胜。</li>
+      <li>动物左上角的<b>小黄点</b> = 本回合剩余攻击次数（亮点=还能攻击，灰点=已用完）。</li>
+    </ul>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+'use strict';
+
+/* ================= 基础 ================= */
+const $ = (id) => document.getElementById(id);
+const socket = io();
+let myId = null, lobby = null, G = null, prevG = null;
+let selection = null;        // {kind:'play',cid} | {kind:'attack',iid} | null
+let drag = null;             // {type:'card'|'animal', cid|iid, ghost, moved, startX, startY, sourceEl}
+let justDragged = false;
+
+const ROW_LABEL = { front: '前排', back: '后排' };
+const TERRITORY_ORDER = ['forest', 'field', 'water', 'sky'];
+const TERRITORY_COLOR = { forest: '#4f9e58', field: '#d9a441', water: '#38b2c4', sky: '#9a6fe0' };
+
+/* 8 种动物图案（emoji 彩色版本） */
+const ANIMAL_EMOJI = {
+  wolf: '🐺', bear: '🐻', owl: '🦉', fox: '🦊',
+  squirrel: '🐿️', deer: '🦌', frog: '🐸', eagle: '🦅'
+};
+function animalEmoji(key) { return ANIMAL_EMOJI[key] || '🐾'; }
+
+/* 8 种动物卡牌数据（与服务端 game.js CARDS 保持一致） */
+const CARDS = {
+  wolf:     { key:'wolf',     name:'狼',     cost:4, atk:6, def:4, territory:'forest' },
+  bear:     { key:'bear',     name:'熊',     cost:6, atk:8, def:5, territory:'forest' },
+  owl:      { key:'owl',      name:'猫头鹰', cost:3, atk:4, def:3, territory:'sky' },
+  fox:      { key:'fox',      name:'狐狸',   cost:2, atk:3, def:3, territory:'field' },
+  squirrel: { key:'squirrel', name:'松鼠',   cost:1, atk:2, def:2, territory:'field' },
+  deer:     { key:'deer',     name:'鹿',     cost:4, atk:5, def:4, territory:'forest' },
+  frog:     { key:'frog',     name:'青蛙',   cost:2, atk:3, def:4, territory:'water' },
+  eagle:    { key:'eagle',    name:'老鹰',   cost:4, atk:6, def:3, territory:'sky' }
+};
+
+function showScreen(name) {
+  for (const el of document.querySelectorAll('.screen')) el.classList.remove('active');
+  $('screen-' + name).classList.add('active');
+}
+let toastTimer = null;
+function toast(msg) {
+  $('toast').textContent = msg; $('toast').classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('show'), 2600);
+}
+function nickValue() { return $('menuNick').value.trim(); }
+function act(payload) { socket.emit('game_action', payload); }
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+/* ================= 菜单 / 大厅 ================= */
+$('menuNick').value = localStorage.getItem('forestNick') || '';
+$('menuNick').addEventListener('change', (e) => localStorage.setItem('forestNick', e.target.value.trim().slice(0, 10)));
+$('btnAI').addEventListener('click', () => { localStorage.setItem('forestNick', nickValue()); socket.emit('start_ai', { nickname: nickValue() }); });
+document.querySelectorAll('[data-cap]').forEach((btn) => btn.addEventListener('click', () => {
+  localStorage.setItem('forestNick', nickValue());
+  socket.emit('create_room', { nickname: nickValue(), maxPlayers: Number(btn.dataset.cap) });
+}));
+$('menuCode').addEventListener('input', (e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6); });
+$('btnJoin').addEventListener('click', () => {
+  const code = $('menuCode').value.trim();
+  if (code.length !== 6) return toast('请输入 6 位数字房间码');
+  localStorage.setItem('forestNick', nickValue());
+  socket.emit('join_room', { nickname: nickValue(), code });
+});
+
+/* 邀请链接自动加入：打开 ?room=XXXXXX 时免输房间码 */
+(function autoJoinFromUrl() {
+  const code = new URLSearchParams(location.search).get('room');
+  if (!code || !/^\d{6}$/.test(code)) return;
+  let nick = localStorage.getItem('forestNick') || '';
+  if (!nick) {
+    nick = '玩家' + Math.floor(1000 + Math.random() * 9000);
+    localStorage.setItem('forestNick', nick);
+  }
+  $('menuNick').value = nick;
+  $('menuCode').value = code;
+  toast(`正在通过邀请链接加入房间 ${code}…`);
+  socket.emit('join_room', { nickname: nick, code });
+})();
+
+socket.on('joined_room', (d) => { myId = d.playerId; });
+socket.on('lobby_state', (data) => { lobby = data; renderLobby(); showScreen('lobby'); });
+
+function renderLobby() {
+  $('lobbyCode').textContent = lobby.code;
+  $('inviteLink').value = `${location.origin}/?room=${lobby.code}`;
+  const is4 = lobby.maxPlayers === 4;
+  $('lobbyCapacity').textContent = is4 ? '4 人房 · 2v2 组队对战' : '2 人房 · 1v1';
+  const seatsEl = $('seats'); seatsEl.innerHTML = '';
+  for (let i = 0; i < lobby.maxPlayers; i++) {
+    const p = lobby.players[i];
+    const div = document.createElement('div');
+    div.className = 'seat' + (p ? ' filled' : '') + (p && p.team === 'b' ? ' team-b' : '');
+    if (p) {
+      const tags = [];
+      if (p.isHost) tags.push('<span class="tag tag-host">房主</span>');
+      if (p.id === myId) tags.push('<span class="tag tag-me">我</span>');
+      if (p.isAI) tags.push('<span class="tag tag-ai">电脑</span>');
+      if (p.online === false) tags.push('<span class="tag tag-offline">掉线</span>');
+      const teamDot = is4 ? `<span class="team-dot" style="background:${p.team==='b'?'#9a6fe0':'#4f9e58'}"></span>` : '';
+      div.innerHTML = `<div class="who">${teamDot}${escapeHtml(p.name)}</div><div class="tags">${tags.join('')}</div>`;
+    } else div.innerHTML = '<div class="empty">虚位以待</div>';
+    seatsEl.appendChild(div);
+  }
+  const isHost = lobby.hostId === myId;
+  const humans = lobby.players.filter((p) => !p.isAI);
+  $('btnStart').style.display = isHost ? 'block' : 'none';
+  if (humans.length >= 2) {
+    $('btnStart').disabled = false;
+    $('lobbyHint').textContent = isHost ? '人已到齐，开战！' : '人已到齐，等待房主开始…';
+  } else {
+    $('btnStart').disabled = !isHost;
+    $('lobbyHint').textContent = isHost ? '空位将由电脑自动补位，可直接开战' : '等待房主开始游戏…';
+  }
+  // 房间事件日志
+  const logEl = $('roomLog');
+  logEl.innerHTML = (lobby.events || []).map((e) =>
+    `<div class="ev-${e.kind}">· ${escapeHtml(e.text)}</div>`).join('') || '<div style="color:#5f7a62">暂无动态</div>';
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+$('btnCopy').addEventListener('click', async () => {
+  if (!lobby) return;
+  try { await navigator.clipboard.writeText(lobby.code); }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = lobby.code; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+  $('btnCopy').textContent = '已复制'; setTimeout(() => ($('btnCopy').textContent = '复制'), 1500);
+});
+$('btnCopyLink').addEventListener('click', async () => {
+  const link = $('inviteLink').value;
+  if (!link) return;
+  try { await navigator.clipboard.writeText(link); }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = link; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+  $('btnCopyLink').textContent = '已复制'; setTimeout(() => ($('btnCopyLink').textContent = '复制链接'), 1500);
+});
+$('btnStart').addEventListener('click', () => socket.emit('start_game'));
+$('btnLeaveLobby').addEventListener('click', backToMenu);
+
+function backToMenu() {
+  socket.emit('leave_room');
+  lobby = null; G = null; prevG = null; selection = null;
+  $('resultLayer').classList.remove('show');
+  showScreen('menu');
+}
+
+/* ================= 对局网络事件 ================= */
+socket.on('game_start', (snap) => {
+  G = snap; prevG = null; selection = null;
+  $('resultLayer').classList.remove('show');
+  showScreen('game');
+  renderGame();
+});
+socket.on('game_state', (snap) => {
+  const wasOver = G && G.phase === 'over';
+  prevG = G;
+  G = snap;
+  if (snap.activeId !== myId) selection = null;
+  if (!wasOver && snap.phase === 'over') setTimeout(showResultLayer, 900);
+  renderGame();
+});
+socket.on('match_aborted', (d) => { toast(d.reason || '对局已中止'); lobby = null; G = null; prevG = null; selection = null; $('resultLayer').classList.remove('show'); showScreen('menu'); });
+socket.on('error_msg', (d) => toast(d.message || '操作失败'));
+socket.on('player_takenover', (d) => toast(`${d.name} 掉线，由电脑托管`));
+
+$('btnQuit').addEventListener('click', () => { if (G && G.phase !== 'over' && !window.confirm('确定离开当前对局吗？')) return; backToMenu(); });
+$('btnResultMenu').addEventListener('click', backToMenu);
+$('btnAgain').addEventListener('click', () => {
+  $('resultLayer').classList.remove('show');
+  if (lobby && !lobby.isAIRoom) socket.emit('back_to_lobby');
+  else { socket.emit('leave_room'); socket.emit('start_ai', { nickname: nickValue() || localStorage.getItem('forestNick') || '' }); }
+});
+
+/* ================= 规则弹窗 ================= */
+function openRules() { $('rulesLayer').classList.add('show'); }
+function closeRules() { $('rulesLayer').classList.remove('show'); }
+$('btnMenuRules').addEventListener('click', openRules);
+$('btnRules').addEventListener('click', openRules);
+$('btnRulesClose').addEventListener('click', closeRules);
+$('rulesLayer').addEventListener('click', (e) => { if (e.target.id === 'rulesLayer') closeRules(); });
+
+/* ================= 渲染辅助 ================= */
+function meTeam() { return G.me; }
+function foeTeam() { return G.foe; }
+function mePlayer() { return G.players.find((p) => p.id === myId); }
+
+function apPips(ap) { let h=''; for (let i=1;i<=10;i++) h += `<span class="pip ${i<=ap?'on':''}"></span>`; return h; }
+function colorDots(team) {
+  const have = new Set(team.colors.map((c) => c.key));
+  return TERRITORY_ORDER.map((k) => {
+    const on = have.has(k);
+    return `<span class="cdot ${on?'on':''}" style="${on?'background:'+TERRITORY_COLOR[k]:''}"></span>`;
+  }).join('');
+}
+
+function renderHero(elId, team, isMe) {
+  const el = $(elId);
+  const me = mePlayer();
+  el.dataset.side = isMe ? 'me' : 'foe';
+  el.classList.toggle('targetable', !!selection && selection.kind === 'attack' && !isMe && attackerInfo() && attackerInfo().heroLegal);
+  const foeP = G.players.find(p => p.team !== G.myTeam);
+  const name = isMe ? (me ? me.name : '你') : (foeP ? foeP.name : '对手');
+  const aiFlag = isMe ? '<span class="ai-flag" style="color:#9fd890">你</span>' : (foeP && foeP.isAI ? '<span class="ai-flag">电脑</span>' : '');
+  const ap = isMe && me ? me.ap : 0;
+  el.innerHTML = `
+    <div class="hero-name">${escapeHtml(name)}${aiFlag}</div>
+    <div class="energy-box"><span class="energy-num">${team.energy}</span><span class="energy-cap">/ ${G.maxEnergy} 能量</span></div>
+    ${isMe ? `<div class="ap-pips">${apPips(ap)}</div>` : ''}
+    <div class="hero-meta">
+      <span title="已占据的领地色（集齐3种获胜）">领地 ${colorDots(team)}</span>
+    </div>`;
+}
+
+function renderPlayerList() {
+  const el = $('playerList');
+  el.innerHTML = G.players.map((p) => {
+    const isMe = p.id === myId;
+    const active = p.isActive;
+    return `<div class="pl-card ${isMe?'mine':''} ${active?'active':''}">
+      <div class="pl-name"><span class="team-dot" style="background:${p.team==='b'?'#9a6fe0':'#4f9e58'}"></span>${escapeHtml(p.name)}${p.isAI?'<span style="color:#c9a5ec;font-size:10px">AI</span>':''}</div>
+      <div class="pl-meta">${active?'<b style="color:var(--gold)">行动中</b>':'等待中'}<br><span title="手牌数量">🃏 ${p.handCount}</span> · <span title="牌堆剩余牌数">📚 ${p.deckCount}</span>${isMe?`<br><span title="剩余行动点（费）">⚡ ${p.ap} AP</span>`:''}</div>
+    </div>`;
+  }).join('');
+}
+
+function attackerInfo() {
+  if (!selection || selection.kind !== 'attack') return null;
+  for (const a of meTeam().board.front.concat(meTeam().board.back)) if (a && a.iid === selection.iid) return a;
+  return null;
+}
+
+function animalTile(a, ownerIsMe) {
+  const atkInfo = selection && selection.kind === 'attack' ? attackerInfo() : null;
+  const selected = selection && selection.kind === 'attack' && selection.iid === a.iid;
+  const targetable = atkInfo && !ownerIsMe && atkInfo.targets.includes(a.iid);
+  const myTurn = G.activeId === myId;
+  const ready = ownerIsMe && myTurn && a.canAttack;
+  const movable = ownerIsMe && myTurn && (a.canMove || a.canUndo);
+  const buffed = a.def > a.baseDef;
+  const acts = [];
+  for (let i = 0; i < a.perTurn; i++) acts.push(`<span class="act-dot ${i >= a.attacksLeft ? 'spent' : ''}"></span>`);
+  const remain = a.def - a.dmg;
+  return `<div class="animal ${ownerIsMe?'mine':'foe'} ${ready?'ready':''} ${movable?'movable':''} ${selected?'selected':''} ${targetable?'targetable':''}"
+            data-iid="${a.iid}" style="--c:${a.bodyColor}" title="${escapeHtml(a.name)} · ${escapeHtml(a.ability)}">
+            <span class="acts">${acts.join('')}</span>
+            <span class="gem" style="background:${a.territoryColor}"></span>
+            <span class="emoji">${animalEmoji(a.cid)}</span>
+            <span class="an-name">${escapeHtml(a.name)}</span>
+            <span class="an-ability">${escapeHtml(a.ability)}</span>
+            <span class="atk-def"><span class="v-atk">⚔${a.atk}</span><span class="v-def ${buffed?'buffed':''}">🛡${remain}</span></span>
+          </div>`;
+}
+
+function renderRow(elId, arr, ownerIsMe, rowKey) {
+  const el = $(elId);
+  const dropPlay = selection && selection.kind === 'play' && ownerIsMe && G.activeId === myId;
+  el.innerHTML = arr.map((a, slot) => {
+    if (a) return `<div class="slot occupied" data-owner="${ownerIsMe?'me':'foe'}" data-row="${rowKey}" data-slot="${slot}">${animalTile(a, ownerIsMe)}</div>`;
+    return `<div class="slot ${dropPlay?'drop-here':''}" data-owner="${ownerIsMe?'me':'foe'}" data-row="${rowKey}" data-slot="${slot}">
+              <span class="row-tag">${ROW_LABEL[rowKey]} ${slot+1}</span></div>`;
+  }).join('');
+}
+
+function renderHand() {
+  const myTurn = G.activeId === myId && G.phase === 'playing';
+  const wrap = $('hand');
+  const keepScroll = wrap.scrollLeft;   // innerHTML 重绘会重置滚动条，先记住
+  wrap.innerHTML = G.yourHand.map((c) => {
+    const playable = myTurn && c.playable;
+    const selected = selection && selection.kind === 'play' && selection.cid === c.cid;
+    const reduced = c.cost < c.baseCost;
+    return `<div class="hcard ${playable?'playable':'unplayable'} ${selected?'selected':''}" data-cid="${c.cid}">
+        <span class="cost ${reduced?'reduced':''}">${c.cost}${reduced?`<span class="base">${c.baseCost}</span>`:''}</span>
+        <span class="gem" style="background:${c.territoryColor}"></span>
+        <div class="art" style="background:linear-gradient(180deg,${c.bodyColor}44,transparent)">
+          <span class="emoji">${animalEmoji(c.key)}</span>
+          <span class="nm">${escapeHtml(c.name)}</span>
+        </div>
+        <div class="skill"><b>${escapeHtml(c.ability)}</b>${escapeHtml(c.abilityDesc)}</div>
+        <span class="stats"><span class="s-atk">⚔${c.atk}</span><span class="s-def">🛡${c.def}</span></span>
+      </div>`;
+  }).join('');
+  wrap.scrollLeft = keepScroll;         // 恢复滚动条位置，避免收回的牌"消失"在视野外
+  const count = G.yourHand.length;
+  $('handHint').textContent = myTurn
+    ? (selection ? (selection.kind === 'play' ? '点高亮空格放置；点该牌取消' : '点高亮目标攻击；点该动物取消')
+                 : '拖拽手牌到空格出牌；可连续出多张；本回合的动物可拖回手牌或换位')
+    : `对手行动中…（你的手牌 ${count} 张）`;
+}
+
+function renderLog() {
+  const mine = new Set((G.yourIntel || []).map((x) => x.text));
+  const lines = G.log.map((l) => `<div class="lg-${l.kind}">${escapeHtml(l.text)}</div>`);
+  const intel = (G.yourIntel || []).slice(-3).map((x) => {
+    let cardHtml = '';
+    if (x.cardKey && CARDS[x.cardKey]) {
+      const c = CARDS[x.cardKey];
+      const tc = TERRITORY_COLOR[c.territory];
+      cardHtml = `<div class="intel-card" style="--tc:${tc}">
+        <span class="ic-cost">${c.cost}</span>
+        <span class="ic-emoji">${animalEmoji(c.key)}</span>
+        <span class="ic-name">${c.name}</span>
+        <span class="ic-stats">${c.atk}/${c.def}</span>
+      </div>`;
+    }
+    return `<div class="lg-intel">🔒 ${escapeHtml(x.text)}${cardHtml}</div>`;
+  });
+  $('logBox').innerHTML = intel.join('') + lines.join('');
+  $('logBox').scrollTop = $('logBox').scrollHeight;
+}
+
+/* ================= 动画触发（基于快照 diff） ================= */
+function triggerAnimations() {
+  if (!prevG || !G) return;
+  // 1) 新入场动物 → 翻转动画
+  const prevIids = new Set();
+  for (const t of [prevG.me, prevG.foe]) for (const r of ['front','back']) t.board[r].forEach(a => { if (a) prevIids.add(a.iid); });
+  for (const t of [G.me, G.foe]) {
+    for (const r of ['front','back']) {
+      t.board[r].forEach((a, i) => {
+        if (a && !prevIids.has(a.iid)) {
+          const container = document.querySelector(`.slot[data-iid-ref]`) ; // fallback
+          const el = document.querySelector(`.animal[data-iid="${a.iid}"]`);
+          if (el) el.classList.add('play-anim');
+        }
+      });
+    }
+  }
+  // 2) 能量变化 → 飘字
+  if (prevG.foe && G.foe.energy !== prevG.foe.energy) {
+    const diff = G.foe.energy - prevG.foe.energy;
+    if (diff < 0) spawnFloat($('foeHero'), `-${-diff}`, '#ff8a7a');
+  }
+  if (prevG.me && G.me.energy !== prevG.me.energy) {
+    const diff = G.me.energy - prevG.me.energy;
+    if (diff < 0) spawnFloat($('myHero'), `-${-diff}`, '#ff8a7a');
+    else if (diff > 0) spawnFloat($('myHero'), `+${diff}`, '#9fe89a');
+  }
+  // 3) 动物受伤 → 抖动
+  const prevDmg = new Map();
+  for (const t of [prevG.me, prevG.foe]) for (const r of ['front','back']) t.board[r].forEach(a => { if (a) prevDmg.set(a.iid, a.dmg); });
+  for (const t of [G.me, G.foe]) for (const r of ['front','back']) t.board[r].forEach(a => {
+    if (a && prevDmg.has(a.iid) && a.dmg > prevDmg.get(a.iid)) {
+      const el = document.querySelector(`.animal[data-iid="${a.iid}"]`);
+      if (el) { el.classList.remove('hit-anim'); void el.offsetWidth; el.classList.add('hit-anim'); }
+    }
+  });
+}
+
+function spawnFloat(container, text, color) {
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = 'float-text';
+  el.textContent = text;
+  el.style.color = color;
+  el.style.left = '50%';
+  el.style.top = '20%';
+  el.style.transform = 'translateX(-50%)';
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 1100);
+}
+
+function renderGame() {
+  if (!G) return;
+  const me = meTeam(), foe = foeTeam();
+  const myTurn = G.activeId === myId && G.phase === 'playing';
+  const meP = mePlayer();
+  $('turnBanner').textContent = `第 ${G.turnNumber} 回合 · ${G.phase === 'over' ? '对局结束' : myTurn ? '你的回合' : (G.players.find(p=>p.id===G.activeId)?.name||'') + ' 行动中'}`;
+  $('turnBanner').className = 'turn-banner ' + (myTurn ? 'mine' : 'foe');
+  $('btnEnd').disabled = !myTurn;
+  $('btnEnd').textContent = myTurn ? '结束回合' : '对手思考中…';
+  $('apNow').textContent = meP ? meP.ap : 0;
+  $('apMeter').classList.toggle('active', myTurn && !!meP && meP.ap > 0);
+
+  renderHero('foeHero', foe, false);
+  renderHero('myHero', me, true);
+  renderRow('foeBack', foe.board.back, false, 'back');
+  renderRow('foeFront', foe.board.front, false, 'front');
+  renderRow('myFront', me.board.front, true, 'front');
+  renderRow('myBack', me.board.back, true, 'back');
+  renderHand();
+  renderLog();
+  renderPlayerList();
+  triggerAnimations();
+}
+
+/* ================= 交互：拖拽（手牌出牌 / 动物撤销 / 动物换位） ================= */
+function clearDragOver() {
+  document.querySelectorAll('.slot.drag-over, .slot.move-here').forEach((s) => s.classList.remove('drag-over','move-here'));
+  $('hand').classList.remove('drop-target');
+}
+
+/* 手牌 pointerdown → 出牌拖拽 */
+$('hand').addEventListener('pointerdown', (e) => {
+  const cardEl = e.target.closest('.hcard');
+  if (!cardEl || !cardEl.classList.contains('playable') || !G || G.phase !== 'playing' || G.activeId !== myId) return;
+  e.preventDefault();
+  const cid = Number(cardEl.dataset.cid);
+  const rect = cardEl.getBoundingClientRect();
+  const ghost = cardEl.cloneNode(true);
+  ghost.classList.add('drag-ghost');
+  ghost.style.width = rect.width + 'px'; ghost.style.height = rect.height + 'px';
+  ghost.style.left = rect.left + 'px'; ghost.style.top = rect.top + 'px';
+  document.body.appendChild(ghost);
+  drag = { type: 'card', cid, ghost, moved: false, startX: e.clientX, startY: e.clientY };
+  try { cardEl.setPointerCapture(e.pointerId); } catch (_) {}
+});
+
+/* 场上动物 pointerdown → 撤销 / 换位拖拽 */
+$('arena').addEventListener('pointerdown', (e) => {
+  if (justDragged) return;
+  const animalEl = e.target.closest('.animal.mine');
+  if (!animalEl || !G || G.phase !== 'playing' || G.activeId !== myId) return;
+  const iid = String(animalEl.dataset.iid);
+  const a = findMyAnimal(iid);
+  if (!a || (!a.canMove && !a.canUndo)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const rect = animalEl.getBoundingClientRect();
+  const ghost = animalEl.cloneNode(true);
+  ghost.classList.add('drag-ghost');
+  ghost.style.width = rect.width + 'px'; ghost.style.height = rect.height + 'px';
+  ghost.style.left = rect.left + 'px'; ghost.style.top = rect.top + 'px';
+  document.body.appendChild(ghost);
+  drag = { type: 'animal', iid, ghost, moved: false, startX: e.clientX, startY: e.clientY };
+  try { animalEl.setPointerCapture(e.pointerId); } catch (_) {}
+});
+
+function findMyAnimal(iid) {
+  for (const r of ['front','back']) for (const a of meTeam().board[r]) if (a && a.iid === iid) return a;
+  return null;
+}
+
+document.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+  if (!drag.moved && Math.hypot(dx, dy) > 5) drag.moved = true;
+  drag.ghost.style.left = (e.clientX - drag.ghost.offsetWidth / 2) + 'px';
+  drag.ghost.style.top = (e.clientY - drag.ghost.offsetHeight / 2) + 'px';
+  clearDragOver();
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  const slotEl = under ? under.closest('.slot') : null;
+  const handEl = under ? under.closest('#hand') : null;
+
+  if (drag.type === 'card') {
+    if (slotEl && slotEl.dataset.owner === 'me' && !slotEl.classList.contains('occupied')) slotEl.classList.add('drag-over');
+  } else {
+    // 动物拖拽：空格高亮为可移动；手牌区高亮为可撤销
+    if (slotEl && slotEl.dataset.owner === 'me' && !slotEl.classList.contains('occupied')) slotEl.classList.add('move-here');
+    if (handEl) $('hand').classList.add('drop-target');
+  }
+});
+
+document.addEventListener('pointerup', (e) => {
+  if (!drag) return;
+  const d = drag; drag = null;
+  d.ghost.remove();
+  clearDragOver();
+  if (!d.moved) {
+    // 移动不足 → 视为点击
+    if (d.type === 'card') {
+      const card = G && G.yourHand.find((c) => c.cid === d.cid);
+      if (card && card.playable) {
+        if (selection && selection.kind === 'play' && selection.cid === d.cid) selection = null;
+        else selection = { kind: 'play', cid: d.cid };
+        renderGame();
+      }
+    } else {
+      // 点击己方动物 → 选中发起攻击
+      const a = findMyAnimal(d.iid);
+      if (a) {
+        if (!a.canAttack) { if (a.canMove || a.canUndo) toast('拖拽它可换位或收回手牌'); return; }
+        if (selection && selection.kind === 'attack' && selection.iid === d.iid) selection = null;
+        else selection = { kind: 'attack', iid: d.iid };
+        renderGame();
+      }
+    }
+    return;
+  }
+  justDragged = true;
+  setTimeout(() => { justDragged = false; }, 0);
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  const slotEl = under ? under.closest('.slot') : null;
+  const handEl = under ? under.closest('#hand') : null;
+
+  if (d.type === 'card') {
+    if (slotEl && slotEl.dataset.owner === 'me' && !slotEl.classList.contains('occupied')) {
+      selection = null;
+      act({ action: 'play', cid: d.cid, row: slotEl.dataset.row, slot: Number(slotEl.dataset.slot) });
+    }
+  } else {
+    // 动物落点
+    if (handEl) {
+      // 撤销回手牌
+      act({ action: 'undo', iid: d.iid });
+    } else if (slotEl && slotEl.dataset.owner === 'me' && !slotEl.classList.contains('occupied')) {
+      act({ action: 'move', iid: d.iid, row: slotEl.dataset.row, slot: Number(slotEl.dataset.slot) });
+    }
+  }
+});
+
+document.addEventListener('pointercancel', () => {
+  if (!drag) return; drag.ghost.remove(); clearDragOver(); drag = null;
+});
+
+/* 点击备用交互 */
+$('hand').addEventListener('click', (e) => {
+  if (justDragged) return;
+  const cardEl = e.target.closest('.hcard');
+  if (!cardEl || !G || G.phase !== 'playing' || G.activeId !== myId) return;
+  const cid = Number(cardEl.dataset.cid);
+  const card = G.yourHand.find((c) => c.cid === cid);
+  if (!card || !card.playable) return toast('行动点不足，打不出这张牌');
+  if (selection && selection.kind === 'play' && selection.cid === cid) selection = null;
+  else selection = { kind: 'play', cid };
+  renderGame();
+});
+
+$('arena').addEventListener('click', (e) => {
+  if (justDragged || !G || G.phase !== 'playing') return;
+  const animalEl = e.target.closest('.animal');
+  const slotEl = e.target.closest('.slot');
+  if (animalEl) {
+    const iid = String(animalEl.dataset.iid);
+    let ownerIsMe = false, animal = null;
+    for (const r of ['front','back']) { const f = meTeam().board[r].find(x => x && x.iid === iid); if (f) { ownerIsMe = true; animal = f; } }
+    if (!ownerIsMe) for (const r of ['front','back']) { const f = foeTeam().board[r].find(x => x && x.iid === iid); if (f) animal = f; }
+    if (ownerIsMe) {
+      if (G.activeId !== myId) return;
+      if (!animal.canAttack) return toast(animal.canMove || animal.canUndo ? '拖拽它可换位或收回手牌' : '它本回合已经无法行动');
+      if (selection && selection.kind === 'attack' && selection.iid === iid) selection = null;
+      else selection = { kind: 'attack', iid };
+      renderGame();
+    } else if (selection && selection.kind === 'attack') {
+      const atkA = attackerInfo();
+      if (atkA && atkA.targets.includes(iid)) {
+        const atkIid = selection.iid;
+        selection = null; renderGame(); act({ action: 'attack', iid: atkIid, target: iid });
+      } else toast('这个目标现在不能被攻击（需先突破前排）');
+    }
+    return;
+  }
+  if (slotEl && selection && selection.kind === 'play' && slotEl.dataset.owner === 'me') {
+    if (slotEl.classList.contains('occupied')) return;
+    const cid = selection.cid;
+    selection = null; renderGame(); act({ action: 'play', cid, row: slotEl.dataset.row, slot: Number(slotEl.dataset.slot) });
+    return;
+  }
+  selection = null; renderGame();
+});
+
+// 修复：英雄攻击的 selection 闭包问题
+$('foeHero').addEventListener('click', (e) => {
+  if (justDragged || !selection || selection.kind !== 'attack') return;
+  const atkA = attackerInfo();
+  if (atkA && atkA.heroLegal) {
+    const atkIid = selection.iid;
+    selection = null; renderGame(); act({ action: 'attack', iid: atkIid, target: 'hero' });
+  } else toast('对方前排还有动物，不能直接攻击英雄（老鹰可俯冲）');
+});
+
+$('btnEnd').addEventListener('click', () => { if (G && G.activeId === myId) { selection = null; act({ action: 'end_turn' }); } });
+
+/* ================= 结算 ================= */
+function showResultLayer() {
+  if (!G || G.phase !== 'over') return;
+  const verdict = $('resultVerdict');
+  const reasonMap = { energy: '森林能量归零，对决结束', territory: '集齐 3 种领地色，称霸森林！', turn: '40 个回合已满，按剩余能量裁决' };
+  const myTeamKey = G.myTeam;
+  const iWin = G.winnerTeam === myTeamKey;
+  if (G.winnerTeam === null) { verdict.textContent = '平 局'; verdict.className = 'result-verdict draw'; }
+  else if (iWin) { verdict.textContent = '胜 利'; verdict.className = 'result-verdict win'; }
+  else { verdict.textContent = '失 败'; verdict.className = 'result-verdict lose'; }
+  const winTeam = G.winnerTeam ? G.teams : null;
+  let winnerName = '';
+  if (G.winnerTeam) {
+    const winners = G.players.filter(p => p.team === G.winnerTeam).map(p => p.name).join('、');
+    winnerName = `${winners} 获胜 · `;
+  }
+  $('resultDetail').textContent = winnerName + (reasonMap[G.endReason] || '');
+  $('btnAgain').textContent = lobby && !lobby.isAIRoom ? '返回房间大厅' : '再来一局';
+  $('resultLayer').classList.add('show');
+}
+</script>
+</body>
+</html>

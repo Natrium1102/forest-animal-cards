@@ -1,0 +1,17 @@
+{
+  "name": "forest-animal-cards",
+  "version": "0.1.0",
+  "private": true,
+  "description": "点链接即玩的森林动物卡牌对战游戏（联机 + vs AI）",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}

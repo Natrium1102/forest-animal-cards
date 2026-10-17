@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>画线弹板 · Line Bounce</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#0b0e1a;
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif; user-select:none; }
+  #game { position:fixed; inset:0; touch-action:none; display:block; }
+
+  /* ---------- HUD ---------- */
+  #hud { position:fixed; inset:0; pointer-events:none; z-index:5; display:none; }
+  #score { position:absolute; top:calc(14px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+    font-size:42px; font-weight:800; color:#fff; letter-spacing:2px;
+    text-shadow:0 0 18px rgba(120,200,255,.9),0 2px 6px rgba(0,0,0,.5); transition:transform .12s; }
+  #score.pop { transform:translateX(-50%) scale(1.25); }
+  #combo { position:absolute; top:calc(64px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+    font-size:16px; font-weight:700; color:#ffd76a; opacity:0; transition:opacity .2s;
+    text-shadow:0 0 12px rgba(255,180,60,.9); }
+  #combo.show { opacity:1; }
+  #lives { position:absolute; top:calc(18px + env(safe-area-inset-top)); left:16px; font-size:22px; letter-spacing:3px;
+    filter:drop-shadow(0 0 6px rgba(255,80,100,.8)); }
+  #best { position:absolute; top:calc(22px + env(safe-area-inset-top)); right:16px; font-size:13px; color:#8fa3c8; }
+  #mute { position:absolute; top:calc(44px + env(safe-area-inset-top)); right:16px; font-size:18px; pointer-events:auto;
+    cursor:pointer; opacity:.7; padding:6px; }
+
+  /* ---------- 覆盖层 ---------- */
+  .overlay { position:fixed; inset:0; z-index:10; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; color:#fff;
+    background:radial-gradient(ellipse at 50% 35%, rgba(40,55,110,.55), rgba(8,10,22,.88));
+    backdrop-filter:blur(6px); }
+  .title { font-size:clamp(38px,9vw,64px); font-weight:900; letter-spacing:6px;
+    background:linear-gradient(135deg,#7ee0ff,#b28dff 55%,#ff9ad5);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 0 22px rgba(140,150,255,.55)); margin-bottom:6px; }
+  .subtitle { color:#9db2d8; font-size:14px; letter-spacing:4px; margin-bottom:34px; }
+  .rules { display:flex; flex-direction:column; gap:14px; margin-bottom:38px; font-size:15px; color:#cdd9f2; }
+  .rules .row { display:flex; align-items:center; gap:12px; background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.1); border-radius:14px; padding:10px 18px; }
+  .rules .ico { font-size:22px; width:30px; text-align:center; }
+  .btn { pointer-events:auto; cursor:pointer; border:none; outline:none;
+    font-size:19px; font-weight:800; letter-spacing:6px; color:#0b0e1a;
+    padding:16px 54px; border-radius:999px;
+    background:linear-gradient(135deg,#6ee7ff,#a78bff);
+    box-shadow:0 0 26px rgba(120,180,255,.55),0 6px 18px rgba(0,0,0,.4);
+    transition:transform .15s, box-shadow .15s; }
+  .btn:active { transform:scale(.94); }
+  .btn:hover { box-shadow:0 0 40px rgba(140,190,255,.85),0 6px 18px rgba(0,0,0,.4); }
+  #overScreen .title { background:linear-gradient(135deg,#ff8a8a,#ffd76a);
+    -webkit-background-clip:text; background-clip:text; }
+  #finalScore { font-size:64px; font-weight:900; color:#fff; margin:8px 0 2px;
+    text-shadow:0 0 24px rgba(255,215,106,.7); }
+  #finalBest { color:#9db2d8; font-size:14px; margin-bottom:34px; }
+  #newBest { color:#ffd76a; font-weight:800; font-size:15px; margin-bottom:6px; display:none;
+    animation:blink 1s infinite; }
+  @keyframes blink { 50% { opacity:.35; } }
+  .hint { margin-top:26px; color:#66779c; font-size:12px; letter-spacing:2px; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div id="lives">❤️❤️❤️</div>
+  <div id="score">0</div>
+  <div id="combo"></div>
+  <div id="best">BEST 0</div>
+  <div id="mute">🔊</div>
+</div>
+
+<div id="startScreen" class="overlay">
+  <div class="title">画线弹板</div>
+  <div class="subtitle">DRAW · BOUNCE · SCORE</div>
+  <div class="rules">
+    <div class="row"><span class="ico">✏️</span><span>手指画线当作弹板，线会随时间消散</span></div>
+    <div class="row"><span class="ico">💎</span><span>把宝石弹进底部篮子里得分，连击加成</span></div>
+    <div class="row"><span class="ico">💣</span><span>炸弹绝不能进篮，画线把它弹开！</span></div>
+  </div>
+  <button class="btn" id="startBtn">开 始</button>
+  <div class="hint">手机 / 电脑浏览器均可游玩</div>
+</div>
+
+<div id="overScreen" class="overlay" style="display:none">
+  <div class="title">游戏结束</div>
+  <div id="newBest">★ 新纪录 ★</div>
+  <div id="finalScore">0</div>
+  <div id="finalBest">BEST 0</div>
+  <button class="btn" id="retryBtn">再来一局</button>
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+ * 画线弹板 —— 单文件 Canvas 小游戏
+ * 核心物理：物品与线段碰撞 → 镜面反射 + 弹板增益
+ * ============================================================ */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+let W = 0, H = 0, DPR = 1, S = 1;           // S: 尺寸缩放因子（适配手机/电脑）
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  S = Math.min(Math.max(Math.min(W, H) / 430, 0.8), 1.5);
+  basket.w = Math.min(Math.max(W * 0.26, 110 * S), 200 * S);
+  basket.h = 30 * S;
+  basket.x = W / 2;
+  basket.top = H - basket.h - 16 * S;
+}
+window.addEventListener('resize', resize);
+window.addEventListener('contextmenu', e => e.preventDefault());
+
+/* ---------------- 音效（WebAudio 合成，无外部资源） ---------------- */
+let audioCtx = null, muted = false;
+function ac() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function tone(f0, f1, dur, type, vol) {
+  if (muted) return;
+  try {
+    const a = ac(), o = a.createOscillator(), g = a.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), a.currentTime + dur);
+    g.gain.setValueAtTime(vol, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
+    o.connect(g).connect(a.destination);
+    o.start(); o.stop(a.currentTime + dur);
+  } catch (e) {}
+}
+const sfx = {
+  bounce()  { tone(420 + Math.random() * 120, 180, 0.08, 'square', 0.05); },
+  score(c)  { tone(520 + c * 40, 900 + c * 60, 0.18, 'sine', 0.12); },
+  bomb()    { tone(160, 40, 0.5, 'sawtooth', 0.22); tone(90, 30, 0.6, 'triangle', 0.18); },
+  miss()    { tone(300, 160, 0.15, 'sine', 0.05); },
+  over()    { tone(400, 60, 0.9, 'sawtooth', 0.15); },
+  start()   { tone(300, 700, 0.25, 'sine', 0.1); }
+};
+document.getElementById('mute').addEventListener('click', e => {
+  muted = !muted; e.target.textContent = muted ? '🔇' : '🔊';
+});
+
+/* ---------------- 游戏状态 ---------------- */
+const basket = { x: 0, top: 0, w: 140, h: 30, glow: 0 };
+let state = 'menu';                 // menu | playing | over
+let strokes = [];                   // 玩家画的线（弹板）
+let items = [];                     // 掉落物
+let particles = [];
+let floaters = [];                  // 得分飘字
+let score = 0, combo = 0, lives = 3;
+let best = +(localStorage.getItem('lineBounceBest') || 0);
+let spawnTimer = 0, elapsed = 0;
+let shakeT = 0, shakeMag = 0, flashA = 0, flashColor = '255,80,80';
+let lastBounceSfx = 0;
+let stars = [];
+for (let i = 0; i < 70; i++)
+  stars.push({ x: Math.random(), y: Math.random(), r: Math.random() * 1.6 + 0.4, p: Math.random() * 6.28 });
+
+document.getElementById('best').textContent = 'BEST ' + best;
+
+/* ---------------- 输入：画线（Pointer Events 为主，鼠标/触摸回退） ---------------- */
+let drawing = null;                 // 当前正在画的 stroke
+let pointerVel = { x: 0, y: 0 };    // 手指速度 → 赋予弹板"挥击"力度
+let lastPtr = null;
+
+function ptrPos(e) {
+  const t = e.touches && e.touches[0] ? e.touches[0] : e;
+  return { x: t.clientX, y: t.clientY };
+}
+function startDraw(e) {
+  if (state !== 'playing' || drawing) return;
+  ac();
+  const p = ptrPos(e);
+  drawing = { pts: [p], born: performance.now(), life: 2600, flash: 0 };
+  strokes.push(drawing);
+  if (strokes.length > 3) strokes.shift();          // 最多同时 3 条线
+  lastPtr = { x: p.x, y: p.y, t: performance.now() };
+  if (e.pointerId !== undefined) { try { canvas.setPointerCapture(e.pointerId); } catch (err) {} }
+}
+function moveDraw(e) {
+  if (!drawing) return;
+  if (e.cancelable && e.type === 'touchmove') e.preventDefault();
+  const p = ptrPos(e);
+  const last = drawing.pts[drawing.pts.length - 1];
+  const dx = p.x - last.x, dy = p.y - last.y;
+  if (dx * dx + dy * dy > 36) {                     // 采样间距 6px，保证线段平滑
+    drawing.pts.push(p);
+    const now = performance.now();
+    if (lastPtr) {
+      const dt = Math.max(now - lastPtr.t, 1) / 1000;
+      const nvx = (p.x - lastPtr.x) / dt, nvy = (p.y - lastPtr.y) / dt;
+      pointerVel.x = pointerVel.x * 0.7 + nvx * 0.3;
+      pointerVel.y = pointerVel.y * 0.7 + nvy * 0.3;
+    }
+    lastPtr = { x: p.x, y: p.y, t: now };
+  }
+}
+function endStroke() {
+  if (drawing && drawing.pts.length < 2)
+    strokes.splice(strokes.indexOf(drawing), 1);    // 点一下不算线
+  drawing = null;
+}
+if (window.PointerEvent) {
+  canvas.addEventListener('pointerdown', startDraw);
+  canvas.addEventListener('pointermove', moveDraw);
+  canvas.addEventListener('pointerup', endStroke);
+  canvas.addEventListener('pointercancel', endStroke);
+} else {
+  canvas.addEventListener('mousedown', startDraw);
+  canvas.addEventListener('mousemove', moveDraw);
+  window.addEventListener('mouseup', endStroke);
+  canvas.addEventListener('touchstart', startDraw, { passive: true });
+  canvas.addEventListener('touchmove', moveDraw, { passive: false });
+  canvas.addEventListener('touchend', endStroke);
+  canvas.addEventListener('touchcancel', endStroke);
+}
+
+/* ---------------- 物理：圆 vs 线段 → 镜面反射 ---------------- */
+function closestOnSeg(px, py, ax, ay, bx, by) {
+  const abx = bx - ax, aby = by - ay;
+  const len2 = abx * abx + aby * aby || 1e-6;
+  let t = ((px - ax) * abx + (py - ay) * aby) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return { x: ax + abx * t, y: ay + aby * t };
+}
+
+function collideLine(it, seg) {
+  const lineHalf = 6 * S;
+  for (const st of strokes) {
+    const pts = st.pts;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const c = closestOnSeg(it.x, it.y, pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y);
+      let nx = it.x - c.x, ny = it.y - c.y;
+      const d = Math.hypot(nx, ny), minD = it.r + lineHalf;
+      if (d >= minD) continue;
+      if (d < 1e-4) { nx = 0; ny = -1; } else { nx /= d; ny /= d; }
+      const vn = it.vx * nx + it.vy * ny;
+      if (vn >= 0) continue;                        // 正在远离线，不处理
+      // —— 镜面反射：v' = v - 2(v·n)n ——
+      it.vx -= 2 * vn * nx;
+      it.vy -= 2 * vn * ny;
+      // 弹板增益：注入手指挥动速度 + 最小弹射速度
+      it.vx += pointerVel.x * 0.22;
+      it.vy += pointerVel.y * 0.22 - 60;
+      const sp = Math.hypot(it.vx, it.vy);
+      const minSp = 520 * S, maxSp = 950 * S;
+      if (sp < minSp) { it.vx *= minSp / sp; it.vy *= minSp / sp; }
+      else if (sp > maxSp) { it.vx *= maxSp / sp; it.vy *= maxSp / sp; }
+      // 推出线外，防止粘连
+      it.x = c.x + nx * (minD + 1);
+      it.y = c.y + ny * (minD + 1);
+      it.spin = (Math.random() - 0.5) * 10;
+      st.flash = 1;
+      burst(c.x, c.y, it.type === 'bomb' ? '#ff9a5a' : '#8fe6ff', 7, 160);
+      if (performance.now() - lastBounceSfx > 50) { sfx.bounce(); lastBounceSfx = performance.now(); }
+      return true;                                  // 每帧只反弹一次
+    }
+  }
+  return false;
+}
+
+/* ---------------- 生成物品 ---------------- */
+function level() { return Math.floor(score / 120); }
+function spawnItem() {
+  const lv = level();
+  const bombChance = Math.min(0.16 + lv * 0.035, 0.42);
+  const type = Math.random() < bombChance ? 'bomb' : 'gem';
+  const r = (type === 'bomb' ? 17 : 15) * S;
+  let x = 30 * S + Math.random() * (W - 60 * S);
+  // 宝石不生成在篮子正上方（避免白送分）；炸弹可以，逼迫玩家弹开它
+  if (type === 'gem' && Math.abs(x - basket.x) < basket.w / 2 + 30 * S) {
+    const dir = x < basket.x ? -1 : 1;
+    x = basket.x + dir * (basket.w / 2 + 30 * S + Math.random() * W * 0.2);
+    x = Math.max(30 * S, Math.min(W - 30 * S, x));
+  }
+  items.push({
+    x,
+    y: -r - 10,
+    vx: (Math.random() - 0.5) * 90,
+    vy: (70 + Math.random() * 60 + lv * 18) * S,
+    r, type, rot: 0, spin: (Math.random() - 0.5) * 4,
+    hue: type === 'gem' ? [185, 265, 320, 45][Math.floor(Math.random() * 4)] : 0,
+    trailT: 0, missed: false
+  });
+}
+
+/* ---------------- 特效 ---------------- */
+function burst(x, y, color, n, power) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * 6.28, sp = (0.3 + Math.random() * 0.7) * power * S;
+    particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+      life: 0.5 + Math.random() * 0.4, maxLife: 0.9, color, size: (1.5 + Math.random() * 2.5) * S, grav: 500 });
+  }
+}
+function explosion(x, y) {
+  burst(x, y, '#ff6a4a', 26, 420); burst(x, y, '#ffd76a', 20, 300); burst(x, y, '#fff', 8, 200);
+  shakeT = 0.45; shakeMag = 14; flashA = 0.5; flashColor = '255,70,60';
+}
+function floater(x, y, text, color, size) {
+  floaters.push({ x, y, text, color, size: size * S, life: 1 });
+}
+function shake(t, m) { shakeT = Math.max(shakeT, t); shakeMag = Math.max(shakeMag, m); }
+
+/* ---------------- 计分 / 生命 ---------------- */
+const elScore = document.getElementById('score'),
+      elCombo = document.getElementById('combo'),
+      elLives = document.getElementById('lives');
+function updateHUD() {
+  elScore.textContent = score;
+  elLives.textContent = '❤️'.repeat(lives) + '🖤'.repeat(Math.max(0, 3 - lives));
+  if (combo >= 2) { elCombo.textContent = 'COMBO ×' + combo; elCombo.classList.add('show'); }
+  else elCombo.classList.remove('show');
+}
+function catchGem(it) {
+  combo++;
+  const gain = 10 * (1 + Math.floor(combo / 3));   // 每 3 连击倍率 +1
+  score += gain;
+  basket.glow = 1;
+  elScore.classList.remove('pop'); void elScore.offsetWidth; elScore.classList.add('pop');
+  floater(it.x, basket.top - 20 * S, '+' + gain, combo >= 5 ? '#ffd76a' : '#8fe6ff', combo >= 5 ? 30 : 24);
+  burst(it.x, basket.top, `hsl(${it.hue},90%,65%)`, 14, 260);
+  if (combo >= 5) shake(0.12, 4);
+  sfx.score(Math.min(combo, 10));
+  updateHUD();
+}
+function catchBomb(it) {
+  lives--; combo = 0;
+  explosion(it.x, basket.top);
+  floater(it.x, basket.top - 30 * S, 'BOOM!', '#ff6a4a', 34);
+  sfx.bomb();
+  updateHUD();
+  if (lives <= 0) gameOver();
+}
+function missGem(it) {
+  if (combo > 0) floater(it.x, H - 60 * S, 'MISS', '#8fa3c8', 18);
+  combo = 0; sfx.miss(); updateHUD();
+}
+function gameOver() {
+  state = 'over';
+  sfx.over();
+  const isNew = score > best;
+  if (isNew) { best = score; localStorage.setItem('lineBounceBest', best); }
+  document.getElementById('finalScore').textContent = score;
+  document.getElementById('finalBest').textContent = 'BEST ' + best;
+  document.getElementById('newBest').style.display = isNew && score > 0 ? 'block' : 'none';
+  document.getElementById('best').textContent = 'BEST ' + best;
+  setTimeout(() => {
+    document.getElementById('overScreen').style.display = 'flex';
+    document.getElementById('hud').style.display = 'none';
+  }, 600);
+}
+function startGame() {
+  state = 'playing';
+  score = 0; combo = 0; lives = 3;
+  items = []; strokes = []; particles = []; floaters = [];
+  spawnTimer = 0; elapsed = 0;
+  shakeT = 0; flashA = 0;
+  drawing = null;
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('overScreen').style.display = 'none';
+  document.getElementById('hud').style.display = 'block';
+  updateHUD();
+  sfx.start();
+}
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+
+/* ---------------- 主循环 ---------------- */
+let lastT = performance.now();
+function loop(now) {
+  requestAnimationFrame(loop);
+  let dt = (now - lastT) / 1000; lastT = now;
+  if (dt > 0.033) dt = 0.033;
+
+  /* ---- 更新 ---- */
+  if (state === 'playing') {
+    elapsed += dt;
+    // 难度：生成间隔 & 下落速度随分数提升
+    const lv = level();
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      spawnItem();
+      spawnTimer = Math.max(0.45, 1.15 - lv * 0.09);
+    }
+    // 物品
+    const G = 1250 * S;
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i];
+      it.vy += G * dt;
+      it.x += it.vx * dt; it.y += it.vy * dt;
+      it.rot += it.spin * dt;
+      // 左右墙反弹
+      if (it.x < it.r) { it.x = it.r; it.vx = Math.abs(it.vx) * 0.85; }
+      if (it.x > W - it.r) { it.x = W - it.r; it.vx = -Math.abs(it.vx) * 0.85; }
+      // 碰线反弹
+      collideLine(it);
+      // 高速拖尾粒子
+      it.trailT -= dt;
+      if (it.trailT <= 0 && Math.hypot(it.vx, it.vy) > 500 * S) {
+        it.trailT = 0.05;
+        particles.push({ x: it.x, y: it.y, vx: 0, vy: 0, life: 0.3, maxLife: 0.3,
+          color: it.type === 'bomb' ? '#ff8a6a' : `hsl(${it.hue},90%,70%)`, size: 2 * S, grav: 0 });
+      }
+      // 篮子判定
+      if (it.vy > 0 && it.y > basket.top - 4 && it.y < basket.top + basket.h &&
+          Math.abs(it.x - basket.x) < basket.w / 2 - 2) {
+        items.splice(i, 1);
+        it.type === 'gem' ? catchGem(it) : catchBomb(it);
+        continue;
+      }
+      // 掉出屏幕
+      if (it.y > H + 50) {
+        items.splice(i, 1);
+        if (it.type === 'gem') missGem(it);
+        else burst(it.x, H - 10, '#666', 6, 120);   // 炸弹落地无害
+      }
+    }
+    // 线的生命周期
+    for (let i = strokes.length - 1; i >= 0; i--) {
+      if (now - strokes[i].born > strokes[i].life && strokes[i] !== drawing) strokes.splice(i, 1);
+    }
+  }
+  // 粒子
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.life -= dt;
+    if (p.life <= 0) { particles.splice(i, 1); continue; }
+    p.vy += (p.grav || 0) * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+  }
+  // 飘字
+  for (let i = floaters.length - 1; i >= 0; i--) {
+    const f = floaters[i];
+    f.life -= dt * 0.9; f.y -= 55 * dt;
+    if (f.life <= 0) floaters.splice(i, 1);
+  }
+  basket.glow = Math.max(0, basket.glow - dt * 3);
+  shakeT = Math.max(0, shakeT - dt);
+  flashA = Math.max(0, flashA - dt * 1.8);
+
+  /* ---- 渲染 ---- */
+  ctx.save();
+  if (shakeT > 0) {
+    const m = shakeMag * (shakeT / 0.45);
+    ctx.translate((Math.random() - 0.5) * m, (Math.random() - 0.5) * m);
+  }
+  drawBackground(now / 1000);
+  if (state !== 'menu') {
+    drawBasket();
+    drawItems();
+    drawStrokes(now);
+    drawParticles();
+    drawFloaters();
+  }
+  ctx.restore();
+  // 全屏闪光
+  if (flashA > 0) {
+    ctx.fillStyle = `rgba(${flashColor},${flashA})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+/* ---------------- 绘制 ---------------- */
+function drawBackground(t) {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#131a33'); g.addColorStop(0.55, '#0e1226'); g.addColorStop(1, '#090b16');
+  ctx.fillStyle = g; ctx.fillRect(-20, -20, W + 40, H + 40);
+  // 极光光斑
+  ctx.globalCompositeOperation = 'lighter';
+  const a1 = ctx.createRadialGradient(W * (0.25 + 0.1 * Math.sin(t * 0.3)), H * 0.28, 0,
+                                      W * (0.25 + 0.1 * Math.sin(t * 0.3)), H * 0.28, W * 0.5);
+  a1.addColorStop(0, 'rgba(70,90,200,0.14)'); a1.addColorStop(1, 'rgba(70,90,200,0)');
+  ctx.fillStyle = a1; ctx.fillRect(0, 0, W, H);
+  const a2 = ctx.createRadialGradient(W * (0.75 + 0.1 * Math.cos(t * 0.24)), H * 0.6, 0,
+                                      W * (0.75 + 0.1 * Math.cos(t * 0.24)), H * 0.6, W * 0.45);
+  a2.addColorStop(0, 'rgba(160,70,190,0.12)'); a2.addColorStop(1, 'rgba(160,70,190,0)');
+  ctx.fillStyle = a2; ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over';
+  // 星星
+  for (const s of stars) {
+    const tw = 0.35 + 0.65 * Math.abs(Math.sin(t * 0.8 + s.p));
+    ctx.fillStyle = `rgba(200,220,255,${0.35 * tw})`;
+    ctx.beginPath(); ctx.arc(s.x * W, s.y * H, s.r * S, 0, 6.28); ctx.fill();
+  }
+}
+
+function drawBasket() {
+  const { x, top, w, h } = basket;
+  const glow = basket.glow;
+  ctx.save();
+  ctx.translate(x, top);
+  if (glow > 0) { ctx.shadowColor = `rgba(120,230,255,${glow})`; ctx.shadowBlur = 30 * glow; }
+  // 篮身（梯形）
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, '#ffb84d'); g.addColorStop(1, '#e07b2a');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(-w / 2 - 4 * S, 0);
+  ctx.lineTo(w / 2 + 4 * S, 0);
+  ctx.lineTo(w / 2 - 10 * S, h);
+  ctx.quadraticCurveTo(0, h + 7 * S, -w / 2 + 10 * S, h);
+  ctx.closePath(); ctx.fill();
+  // 边缘高光
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = glow > 0 ? '#bff3ff' : '#ffd98f';
+  roundRect(-w / 2 - 6 * S, -4 * S, w + 12 * S, 7 * S, 4 * S); ctx.fill();
+  // 内部暗口
+  ctx.fillStyle = 'rgba(60,30,10,0.55)';
+  roundRect(-w / 2 + 6 * S, 3 * S, w - 12 * S, 5 * S, 3 * S); ctx.fill();
+  // 上方提示箭头（呼吸）
+  const bob = Math.sin(performance.now() / 350) * 3 * S;
+  ctx.fillStyle = `rgba(255,220,140,${0.35 + 0.3 * glow})`;
+  ctx.beginPath();
+  ctx.moveTo(-8 * S, -14 * S + bob); ctx.lineTo(8 * S, -14 * S + bob); ctx.lineTo(0, -6 * S + bob);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function drawItems() {
+  for (const it of items) {
+    ctx.save();
+    ctx.translate(it.x, it.y);
+    if (it.type === 'gem') {
+      ctx.rotate(it.rot);
+      ctx.shadowColor = `hsl(${it.hue},95%,65%)`; ctx.shadowBlur = 16;
+      const r = it.r;
+      const g = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r * 1.2);
+      g.addColorStop(0, `hsl(${it.hue},100%,85%)`);
+      g.addColorStop(0.5, `hsl(${it.hue},90%,60%)`);
+      g.addColorStop(1, `hsl(${it.hue},85%,38%)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(0, -r); ctx.lineTo(r * 0.82, 0); ctx.lineTo(0, r); ctx.lineTo(-r * 0.82, 0);
+      ctx.closePath(); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(255,255,255,0.65)'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(0, -r); ctx.lineTo(0, r); ctx.moveTo(-r * 0.82, 0); ctx.lineTo(r * 0.82, 0); ctx.stroke();
+    } else {
+      // 炸弹：脉动红色警戒圈
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 130);
+      ctx.strokeStyle = `rgba(255,70,60,${0.25 + 0.35 * pulse})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, it.r + 5 * S + pulse * 3 * S, 0, 6.28); ctx.stroke();
+      ctx.shadowColor = '#ff4a3a'; ctx.shadowBlur = 10 + 8 * pulse;
+      const g = ctx.createRadialGradient(-it.r * 0.35, -it.r * 0.35, it.r * 0.15, 0, 0, it.r);
+      g.addColorStop(0, '#5a6070'); g.addColorStop(0.6, '#262a36'); g.addColorStop(1, '#10121a');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(0, 0, it.r, 0, 6.28); ctx.fill();
+      ctx.shadowBlur = 0;
+      // 引信火花
+      ctx.strokeStyle = '#8a6a4a'; ctx.lineWidth = 2.5 * S;
+      ctx.beginPath(); ctx.moveTo(0, -it.r); ctx.quadraticCurveTo(4 * S, -it.r - 7 * S, 8 * S, -it.r - 6 * S); ctx.stroke();
+      const sp = 1.5 + Math.random() * 2;
+      ctx.fillStyle = `rgba(255,${180 + Math.floor(Math.random() * 60)},60,0.95)`;
+      ctx.beginPath(); ctx.arc(8 * S, -it.r - 6 * S, sp * S, 0, 6.28); ctx.fill();
+      // 高光
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.beginPath(); ctx.arc(-it.r * 0.35, -it.r * 0.4, it.r * 0.22, 0, 6.28); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+function drawStrokes(now) {
+  for (const st of strokes) {
+    const pts = st.pts;
+    if (pts.length < 2) continue;
+    const age = now - st.born;
+    const fade = Math.min(1, (st.life - age) / 800);   // 最后 0.8s 淡出
+    const flash = st.flash; st.flash = Math.max(0, st.flash - 0.08);
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // 外发光
+    ctx.shadowColor = flash > 0 ? '#ffffff' : '#5ad0ff';
+    ctx.shadowBlur = 14 + flash * 20;
+    ctx.strokeStyle = flash > 0 ? `rgba(255,255,255,0.95)` : 'rgba(110,220,255,0.85)';
+    ctx.lineWidth = (10 - (1 - fade) * 3) * S;
+    pathOf(pts); ctx.stroke();
+    // 亮芯
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 3.5 * S;
+    pathOf(pts); ctx.stroke();
+    ctx.restore();
+  }
+}
+function pathOf(pts) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length - 1; i++) {
+    const mx = (pts[i].x + pts[i + 1].x) / 2, my = (pts[i].y + pts[i + 1].y) / 2;
+    ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+  }
+  ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 6.28); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawFloaters() {
+  for (const f of floaters) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, f.life * 2);
+    ctx.font = `800 ${f.size}px "PingFang SC","Microsoft YaHei",sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.shadowColor = f.color; ctx.shadowBlur = 12;
+    ctx.fillStyle = f.color;
+    ctx.fillText(f.text, f.x, f.y);
+    ctx.restore();
+  }
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+resize();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
