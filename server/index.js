@@ -302,7 +302,22 @@ io.on('connection', (socket) => {
   });
 });
 
+httpServer.on('error', (err) => {
+  if (err.code === 'EADDRINUSE' && process.pkg) {
+    // 端口被占用说明游戏已在运行，直接打开浏览器即可
+    console.log('游戏已经在运行中，正在为你打开浏览器...');
+    require('child_process').exec(`start http://localhost:${PORT}`);
+    setTimeout(() => process.exit(0), 2000);
+  } else {
+    throw err;
+  }
+});
+
 httpServer.listen(PORT, () => {
   console.log(`森林动物卡牌对战服务器已启动: http://localhost:${PORT}`);
   console.log(`端口读取自 process.env.PORT，当前为 ${PORT}`);
+  // 打包为 exe 运行时，自动打开浏览器
+  if (process.pkg) {
+    require('child_process').exec(`start http://localhost:${PORT}`);
+  }
 });
