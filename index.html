@@ -1452,11 +1452,18 @@ const socket = (() => {
   const handlers = {};
   const PREFIX = 'forest-cards-';
   const HOST = 'host';
+  /* 跨国/跨运营商可达的 ICE 配置：国内 STUN + 免费公共 TURN（对称 NAT 兜底） */
+  const PEER_CONFIG = {
+    config: { iceServers: [
+      { urls: ['stun:stun.miwifi.com:3478', 'stun:stun.qq.com:3478', 'stun:stun.chat.bilibili.com:3478', 'stun:stun.l.google.com:19302'] },
+      { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' }
+    ] }
+  };
   let role = 'idle';
   let peer = null, hostConn = null;
   let game = null, timers = [];
   let lobbyCode = '', lobbyMode = 'normal', lobbyCap = 2, lobbyEvents = [], seats = [];
-  let guestSeq = 0;
+  let guestSeq = 0, joinTimer = null;
 
   function fire(ev, d) { (handlers[ev] || []).forEach((f) => f(d)); }
   function addEvent(text, kind) { lobbyEvents.push({ text, kind: kind || 'info', t: Date.now() }); if (lobbyEvents.length > 40) lobbyEvents.shift(); }
@@ -1503,7 +1510,7 @@ const socket = (() => {
   }
   function hostCommand(pid, cmd) {
     if (!game || game.phase !== 'playing') return;
-    if (game.players[pid] && game.players[pid].isAI) return;   // 托管座位不接受原玩家指令
+    if (game.players[pid] && game.players[pid].isAI) return;
     const res = window.gameLib.command(game, pid, cmd);
     if (!res.ok) {
       if (pid === HOST) fire('error_msg', { message: res.error });
@@ -1532,7 +1539,7 @@ const socket = (() => {
     openHostPeer(nickname);
   }
   function openHostPeer(nickname) {
-    peer = new Peer(PREFIX + lobbyCode);
+    peer = new Peer(PREFIX + lobbyCode, PEER_CONFIG);
     peer.on('open', () => {
       seats = [{ id: HOST, name: (nickname || '房主').slice(0, 10) }];
       lobbyEvents = []; addEvent(seats[0].name + ' 创建了房间', 'join');
@@ -1561,7 +1568,6 @@ const socket = (() => {
         const seat = seats.find((s) => s.conn === conn);
         if (!seat) return;
         if (game && game.phase === 'playing' && game.players[seat.id]) {
-          // 掉线托管：该座位转 AI
           game.players[seat.id].isAI = true;
           seat.isAI = true; seat.name = seat.name + '(托管)';
           fire('player_takenover', { name: seat.name });
@@ -1578,10 +1584,21 @@ const socket = (() => {
   }
   function joinRoom(nickname, code) {
     role = 'guest';
-    peer = new Peer();
+    peer = new Peer(PEER_CONFIG);
+    let joined = false;
+    joinTimer = setTimeout(() => {
+      if (!joined) {
+        fire('error_msg', { message: '连不上房主（P2P 直连被网络限制）。请确认：① 房主页面还开着 ② 你们用的是同一个链接版本（GitHub Pages 版）③ 重试一次' });
+        try { peer.destroy(); } catch (e) {}
+        role = 'idle';
+      }
+    }, 10000);
     peer.on('open', () => {
       hostConn = peer.connect(PREFIX + code, { reliable: true });
-      hostConn.on('open', () => hostConn.send({ t: 'join', name: (nickname || '游客').slice(0, 10) }));
+      hostConn.on('open', () => {
+        joined = true; clearTimeout(joinTimer);
+        hostConn.send({ t: 'join', name: (nickname || '游客').slice(0, 10) });
+      });
       hostConn.on('data', (d) => {
         if (!d || !d.t) return;
         if (d.t === 'joined') fire('joined_room', { code: d.code, playerId: d.playerId });
@@ -1593,8 +1610,10 @@ const socket = (() => {
       hostConn.on('close', () => fire('match_aborted', { reason: '房主已离开，对局结束' }));
     });
     peer.on('error', (e) => {
-      if (e.type === 'peer-unavailable') fire('error_msg', { message: '房间不存在，请核对 6 位房间码' });
-      else fire('error_msg', { message: '联机服务连接失败：' + e.type });
+      if (e.type === 'peer-unavailable') {
+        joined = true; clearTimeout(joinTimer);
+        fire('error_msg', { message: '房间不存在：请核对房间码，并确认房主是在 GitHub Pages 版里建的房（ngrok 版的房间这里进不去）' });
+      } else fire('error_msg', { message: '联机服务连接失败：' + e.type });
     });
   }
 
@@ -1636,6 +1655,7 @@ const socket = (() => {
       } else if (ev === 'leave_room') {
         timers.forEach(clearTimeout); timers = [];
         game = null; seats = []; lobbyEvents = [];
+        clearTimeout(joinTimer);
         if (hostConn) { try { hostConn.close(); } catch (e) {} hostConn = null; }
         if (peer) { try { peer.destroy(); } catch (e) {} peer = null; }
         role = 'idle';
