@@ -2,3 +2,7 @@ node_modules/
 cloudflared.exe
 *.log
 /index.html
+# 本机运行产物与私密配置（不入库）
+dist/
+ngrok-bin/
+ngrok.yml

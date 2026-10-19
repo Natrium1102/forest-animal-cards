@@ -42,12 +42,15 @@ function generateCode() {
   return code;
 }
 
-function createRoom(maxPlayers, isAIRoom) {
+function createRoom(maxPlayers, isAIRoom, mode) {
   const code = generateCode();
+  const m = gameLib.MODES[mode] ? mode : 'normal';
   const room = {
     code,
     maxPlayers,
     isAIRoom,
+    mode: m,
+    modeName: gameLib.MODES[m].name,
     status: 'waiting',
     hostId: null,
     channel: `room:${code}`,
@@ -82,6 +85,8 @@ function lobbyPayload(room) {
     status: room.status,
     hostId: room.hostId,
     isAIRoom: room.isAIRoom,
+    mode: room.mode,
+    modeName: room.modeName,
     players: room.seats.map((s) => ({
       id: s.id, name: s.name, isAI: s.isAI, online: s.online,
       team: s.team || null, isHost: s.id === room.hostId
@@ -109,7 +114,7 @@ function startMatch(room) {
   });
 
   const players = room.seats.map((s) => ({ id: s.id, name: s.name, isAI: s.isAI, team: s.team }));
-  room.game = gameLib.createGame(players);
+  room.game = gameLib.createGame(players, { mode: room.mode });
   room.status = 'playing';
   addEvent(room, '对局开始', 'start');
   sendGameState(room, 'game_start');
@@ -204,7 +209,7 @@ io.on('connection', (socket) => {
   socket.on('create_room', (payload = {}) => {
     leaveCurrent(socket, true);
     const maxPlayers = Number(payload.maxPlayers) === 4 ? 4 : 2;
-    const room = createRoom(maxPlayers, false);
+    const room = createRoom(maxPlayers, false, payload.mode);
     joinSeat(socket, room, cleanName(payload.nickname));
     socket.emit('joined_room', { code: room.code, playerId: socket.id });
     emitLobby(room);
@@ -225,7 +230,7 @@ io.on('connection', (socket) => {
 
   socket.on('start_ai', (payload = {}) => {
     leaveCurrent(socket, true);
-    const room = createRoom(2, true);
+    const room = createRoom(2, true, payload.mode);
     joinSeat(socket, room, cleanName(payload.nickname));
     const bot = aiLib.createAIPlayer(room.seats.map((s) => s.name));
     room.seats.push(bot);

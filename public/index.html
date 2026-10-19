@@ -34,6 +34,12 @@
 
   /* ================= 主菜单 ================= */
   #screen-menu { flex-direction:column; align-items:center; justify-content:center; padding:28px 16px; gap:14px; }
+  .mode-row { display:flex; gap:8px; width:100%; }
+  .mode-btn { flex:1; padding:9px 6px; border:2px solid rgba(255,235,180,.35); border-radius:12px; background:rgba(30,42,32,.55); color:#ffe9a8; cursor:pointer; font-size:14px; font-weight:800; text-align:center; transition:.15s; text-shadow:0 1px 3px rgba(0,0,0,.6); }
+  .mode-btn small { display:block; opacity:.85; font-size:10px; font-weight:600; margin-top:3px; color:#fff3cf; }
+  .mode-btn.selected { border-color:var(--gold); background:rgba(233,196,106,.22); box-shadow:0 0 14px rgba(233,196,106,.4); }
+  .pool-badge { position:absolute; top:4px; left:6px; font-size:10px; font-weight:800; color:#3a2c12; background:var(--gold); border-radius:8px; padding:1px 5px; line-height:1.3; box-shadow:0 1px 3px rgba(0,0,0,.3); }
+  .pool-badge.empty { background:#8b95a3; color:#232a33; }
   .logo { text-align:center; margin-bottom:6px; }
   .logo h1 { font-size:clamp(28px,6vw,44px); font-weight:900; letter-spacing:6px;
     background:linear-gradient(135deg,#bde8a8,var(--gold)); -webkit-background-clip:text; background-clip:text;
@@ -162,9 +168,7 @@
   .animal .v-atk { color:#ffb3a7; text-shadow:0 1px 3px rgba(0,0,0,.8); }
   .animal .v-def { color:#a9d8ff; text-shadow:0 1px 3px rgba(0,0,0,.8); }
   .animal .v-def.buffed { color:#c9f5b0; }
-  .animal .acts { position:absolute; top:3px; left:6px; display:flex; gap:2px; }
-  .act-dot { width:6px; height:6px; border-radius:50%; background:#ffe08a; box-shadow:0 0 5px rgba(255,224,138,.8); }
-  .act-dot.spent { background:rgba(255,255,255,.2); box-shadow:none; }
+  .animal .pool-badge { pointer-events:none; }
   .animal .dmg-chip { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
     font-size:22px; font-weight:900; color:#ff6a5a; text-shadow:0 0 8px rgba(0,0,0,.9); pointer-events:none; }
   /* 入场翻转动画 */
@@ -213,6 +217,20 @@
   .intel-card .ic-emoji { font-size:24px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
   .intel-card .ic-name { color:#fff; font-weight:700; font-size:14px; }
   .intel-card .ic-stats { color:#cfe; font-size:12px; background:rgba(0,0,0,.35); padding:1px 6px; border-radius:6px; }
+
+  /* 交换到手的手牌高亮 + 情报揭示层 */
+  @keyframes freshPulse {
+    from { box-shadow:0 0 0 3px rgba(255,224,138,.4), 0 0 14px rgba(255,214,102,.5); }
+    to   { box-shadow:0 0 0 4px rgba(255,224,138,.75), 0 0 34px rgba(255,214,102,.95); }
+  }
+  .hcard.fresh { border-color:#ffe08a; animation:freshPulse 1s ease-in-out infinite alternate; }
+  .intel-reveal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(7,15,10,.78); backdrop-filter:blur(3px); z-index:30; cursor:pointer; }
+  .intel-reveal.show { display:flex; animation:fadeIn .3s ease; }
+  .ir-box { text-align:center; animation:popIn .45s cubic-bezier(.2,1.3,.4,1); padding:20px 46px; }
+  .ir-title { color:#9fe0f2; font-size:16px; font-weight:800; letter-spacing:1px; text-shadow:0 2px 8px rgba(0,0,0,.8); }
+  .ir-card-wrap { transform:scale(1.75); margin:58px auto 62px; width:92px; }
+  .ir-card-wrap .hcard { border-color:#ffe08a; animation:freshPulse 1.1s ease-in-out infinite alternate; }
+  .ir-tip { color:#a8c8ab; font-size:12px; letter-spacing:2px; }
 
   /* 手牌 */
   .hand-wrap { width:100%; display:flex; flex-direction:column; align-items:center; gap:4px; margin-top:2px; position:relative; }
@@ -335,6 +353,11 @@
       <label>你的昵称</label>
       <input id="menuNick" maxlength="10" placeholder="输入昵称（最多 10 个字）">
     </div>
+    <div class="mode-row" id="modeRow">
+      <button class="mode-btn" data-mode="quick">⚡ 快速<small>20 能量 · 约2~3分钟</small></button>
+      <button class="mode-btn selected" data-mode="normal">🌲 普通<small>40 能量 · 约8~10分钟</small></button>
+      <button class="mode-btn" data-mode="deep">🏞️ 深度<small>60 能量 · 约15分钟</small></button>
+    </div>
     <button class="btn btn-leaf" id="btnAI">VS AI 单机对战</button>
     <div class="divider">在线联机</div>
     <div class="btn-row" style="margin-bottom:10px">
@@ -347,9 +370,10 @@
     </div>
     <button class="btn btn-ghost" id="btnJoin">加入房间</button>
     <div class="menu-rules">
-      双方各 <b>40 点森林能量</b>，归零即败；先集齐 <b>3 种领地色</b> 动物也获胜<br>
-      每回合 <b>摸2张</b>（手牌上限8），行动点够可<b>连续出多张</b><br>
-      本回合刚出的牌可<b>拖回手牌撤销</b>或<b>拖拽换位</b>
+      三种模式：<b>快速 20</b> / <b>普通 40</b> / <b>深度 60</b> 点森林能量，归零即败；先集齐 <b>3 种领地色</b> 动物也获胜<br>
+      <b>每回合开始摸 2 张牌</b>（手牌上限 8 张）<br>
+      <b>行动点没用完自动顺延</b>到下回合（总量封顶 15）<br>
+      攻击力是<b>本回合伤害池</b>：可分多次攻击多个目标；<b>反击 = 攻击力÷2 取整（奇数再减 0.5）</b>
     </div>
     <button class="btn btn-ghost" id="btnMenuRules" style="margin-top:10px">📖 查看完整规则</button>
   </div>
@@ -425,68 +449,98 @@
   </div>
 </div>
 
+<!-- 情报揭示层：偷看/交换到的卡牌大图高亮展示 -->
+<div class="intel-reveal" id="intelReveal">
+  <div class="ir-box">
+    <div class="ir-title" id="irTitle">🔒 情报</div>
+    <div class="ir-card-wrap" id="irCardWrap"></div>
+    <div class="ir-tip">点 击 任 意 处 关 闭</div>
+  </div>
+</div>
+
 <!-- 规则弹窗 -->
 <div class="modal-layer" id="rulesLayer">
   <div class="modal">
     <button class="close-x" id="btnRulesClose">×</button>
     <h2>森林动物 · 对战规则</h2>
-    <div class="m-sub">RULES · 胜利条件 / 回合流程 / 8 种动物能力</div>
+    <div class="m-sub">RULES · 胜利条件 / 回合流程 / 攻击与反击 / 9 种动物能力</div>
 
-    <h3>一、胜利条件（满足其一即胜）</h3>
+    <h3>一、三种模式与胜利条件（满足其一即胜）</h3>
     <ul>
-      <li><b>能量胜利</b>：将对方队伍的 <b>森林能量降至 0</b>（双方初始均为 40 点）。</li>
-      <li><b>领地胜利</b>：在己方战场上同时拥有 <b>3 种不同领地色</b> 的动物（林地 / 原野 / 水域 / 天空 中任意 3 种），达成立即获胜。</li>
-      <li><b>平局判定</b>：打满 40 回合仍未分出胜负，按 <b>剩余森林能量</b> 裁决，能量高者胜；能量相同则平局。</li>
+      <li><b>⚡ 快速模式</b>：双方各 <b>20</b> 点森林能量，24 个回合封顶，一局约 2~3 分钟。</li>
+      <li><b>🌲 普通模式</b>（默认）：双方各 <b>40</b> 点能量，40 个回合封顶，一局约 8~10 分钟。</li>
+      <li><b>🏞️ 深度模式</b>：双方各 <b>60</b> 点能量，60 个回合封顶，一局约 15 分钟，博弈拉满。</li>
+      <li><b>能量胜利</b>：把对方队伍的森林能量打到 <b>0</b> 即胜。</li>
+      <li><b>领地胜利（判定时机很重要）</b>：不是打出第 3 色动物时立即获胜，而是——<b>你打出第 3 色动物后，对方行动完一整个回合，再次轮到你出牌时</b>，你的出牌槽（战场）上<b>仍然同时存在 3 种不同领地色的动物</b>，此时才获胜。也就是说：对方有一整个回合的时间击倒你的第 3 色动物来破解领地胜利；只要挺过去了，轮到你时就赢。</li>
+      <li><b>平局判定</b>：回合数打满仍未分出胜负，按<b>剩余森林能量</b>裁决，能量高者胜；完全相同则平局。</li>
     </ul>
 
-    <h3>二、回合流程</h3>
+    <h3>二、回合流程与行动点顺延</h3>
     <ol>
-      <li><b>回合开始</b>：获得 <b>行动点 = min(本方回合数, 10)</b>（第 1 回合 1 点，第 2 回合 2 点……第 10 回合起固定 10 点），并摸 <b>2 张牌</b>（手牌上限 8 张，超出的牌直接弃掉）。<b>双方初始手牌均为 6 张</b>（含 AI），先手第 1 回合不再额外摸牌。</li>
-      <li><b>出牌</b>：只要行动点足够，<b>一回合内可连续打出任意多张牌</b>；每张牌消耗其左上角标注的费用，行动点不足则无法打出。</li>
-      <li><b>攻击</b>：点击己方一只动物选中，再点击对方一只动物发起攻击。<b>由你决定用哪只动物打对方的哪只动物</b>。每只动物每回合默认可攻击 1 次（狼/松鼠可攻击 2 次）。<b>动物一旦发起攻击，立即被锁定在出牌槽中</b>，不能再收回手牌或换位，之后一直留在战场作战，直到生命值归零后离开战场。</li>
-      <li><b>攻击顺序限制</b>：普通动物只能攻击对方<b>前排</b>；对方前排被清空后，才能攻击对方<b>后排</b>。<b>老鹰例外</b>：可越过前排直接攻击后排任意动物。</li>
-      <li><b>反击（重要）</b>：攻击时，<b>只有被攻击的那一只动物会反击</b>（用它自己的攻击力还击），其它动物不参与反击。反击伤害在攻击结算时同时扣除。因此：若对方动物攻击力高于你派出的攻击者，<b>你的攻击者可能被反击打死</b>。双方同时死亡时，攻击方造成的伤害仍然生效。</li>
-      <li><b>结束回合</b>：点「结束回合」按钮，轮到对方行动。</li>
+      <li><b>回合开始</b>：获得行动点，并摸 2 张牌（手牌上限 8 张，超出弃掉）。双方初始手牌均为 6 张（含 AI），先手第 1 回合不额外摸牌。</li>
+      <li><b>行动点顺延（重要）</b>：本回合<b>没用完的行动点不会清零</b>，自动带到下回合。<br>
+        公式：<b>新行动点 = 上回合剩余 + 本回合基础</b>（基础 = 己方回合数，第 1 回合 1 点、第 2 回合 2 点……<b>第 10 回合起每回合固定 +10</b>；总量封顶 <b>15 点</b>）。<br>
+        例：第 2 回合基础 2 点，若上回合剩 1 点没用，则本回合共 3 点可用。</li>
+      <li><b>出牌</b>：只要行动点足够，一回合内可连续打出任意多张牌，每张牌消耗其左上角标注的费用。</li>
+      <li><b>攻击</b>：点击己方一只动物选中，再点击目标发起攻击；攻击力没用完可以继续攻击其它目标。</li>
+      <li><b>结束回合</b>：点「结束回合」按钮，轮到对方行动，剩余行动点自动顺延到你下回合。</li>
     </ol>
 
-    <h3>三、撤销与换位（仅本回合刚出的牌）</h3>
+    <h3>三、攻击规则详解（本作核心）</h3>
     <ul>
-      <li>本回合刚打出、尚未参与攻击的动物，可 <b>拖拽回手牌区</b> 撤销出牌，<b>全额返还行动点</b>。</li>
-      <li>本回合刚打出的动物，可 <b>拖拽到己方其它空格</b> 调整前后排位置。</li>
-      <li>一旦动物<b>参与过攻击</b>，或回合结束后，该动物<b>锁定</b>：无法撤销、无法换位，一直占据当前格位作战，<b>直到生命值归零后直接离开战场</b>。</li>
+      <li><b>攻击力池</b>：动物的攻击力是<b>本回合可自由分配的伤害总量</b>，可以拆开打多个目标，用完为止。<b>每个己方回合开始时，攻击池都会重置回面板攻击力数值</b>（上回合没用完的攻击力不累计到下回合）。<br>
+        例：你的动物攻击力 3。对方有 A（剩 1 血）和 B（满血 8）。你可以先用 1 点攻击力击倒 A，再用剩下的 2 点打 B，B 变成剩 6 血。<br>
+        每次攻击实际消耗 = <b>min(剩余攻击力, 目标剩余生命)</b>；打英雄时 = min(剩余攻击力, 英雄能量)。攻击力全部用完后动物锁定。</li>
+      <li><b>攻击顺序（先动物后英雄）</b>：对方场上还有动物时，<b>不能直接攻击英雄</b>。顺序为：<br>
+        ① 对方前排有动物 → 只能打前排；② 前排清空 → 才能打后排；③ 前后排全空 → 才能攻击英雄。<br>
+        <b>例外</b>：🦅老鹰「俯冲」可越过前排直接打后排（但仍不能越过动物打英雄）；🐆豹「突袭」可无视一切顺序<b>直接攻击英雄</b>。</li>
+      <li><b>反击规则（重要）</b>：攻击对方动物时，<b>只有被攻击的那一只会反击</b>，其它动物不参与。<br>
+        反击伤害 = <b>被攻击者攻击力 ÷ 2 后取整</b>（奇数攻击力即除以 2 再减 0.5：攻击力 5 反击 2、攻击力 7 反击 3；偶数攻击力直接减半：攻击力 4 反击 2、攻击力 6 反击 3）。<br>
+        <b>攻击力 1 反击 0</b>：只有攻击力为 1 的动物才没有反击（1 ÷ 2 − 0.5 = 0）；攻击力 2 反击 1、攻击力 3 反击 1。<br>
+        因此：<b>击杀目标不会挨反击</b>（倒下的动物无法还手）；只有目标<b>没被打死</b>时才会反击你。攻击英雄<b>不会被反击</b>。<br>
+        例：你用攻击力 3 的动物打对方攻击力 6 的动物（没打死）→ 你挨 3 点反击（6÷2）。攻击力低的动物磨血几乎无风险，但也很难击杀高血量目标。</li>
+      <li><b>锁定</b>：动物<b>一旦发起攻击，立即锁定在出牌槽中</b>：不能收回手牌、不能换位，一直留在战场作战，直到生命值归零后直接消失。</li>
+      <li><b>实时血量</b>：所有伤害即时结算，牌面上的 🛡 数字实时更新（绿字表示受到鹿的守护加成）。</li>
     </ul>
 
-    <h3>四、8 种动物能力</h3>
+    <h3>四、撤销与换位（仅本回合刚出的牌）</h3>
+    <ul>
+      <li>本回合刚打出、<b>尚未参与攻击</b>的动物：拖拽回手牌区可撤销出牌，<b>全额返还行动点</b>；拖拽到己方其它空格可调整前后排位置。</li>
+      <li>一旦<b>参与过攻击</b>或回合结束，动物锁定：无法撤销、无法换位，占据格位作战直到阵亡。</li>
+    </ul>
+
+    <h3>五、9 种动物能力（费用与能力强度成正比）</h3>
     <table class="ability-table">
       <thead><tr><th>动物</th><th>领地</th><th>费/攻/防</th><th>能力</th><th>详细说明</th></tr></thead>
       <tbody>
-        <tr><td class="at-name">🐺 狼</td><td>林地</td><td>4 / 6 / 4</td><td>狼群突袭</td><td>入场当回合可<b>额外攻击 1 次</b>（共 2 次）</td></tr>
-        <tr><td class="at-name">🐻 熊</td><td>林地</td><td>6 / 8 / 5</td><td>蛮力</td><td>入场时从对方场上<b>随机夺走 1 只动物</b>归己方（对方动物直接消失）</td></tr>
-        <tr><td class="at-name">🦉 猫头鹰</td><td>天空</td><td>3 / 4 / 3</td><td>夜视</td><td>入场时<b>随机偷看对方 1 张手牌</b>，以卡牌形式展示给你看</td></tr>
-        <tr><td class="at-name">🦊 狐狸</td><td>原野</td><td>2 / 3 / 3</td><td>狡诈</td><td>入场时与对方<b>随机交换 1 张手牌</b></td></tr>
-        <tr><td class="at-name">🐿️ 松鼠</td><td>原野</td><td>1 / 2 / 2</td><td>迅捷</td><td>入场当回合可<b>攻击 2 次</b></td></tr>
-        <tr><td class="at-name">🦌 鹿</td><td>林地</td><td>4 / 5 / 4</td><td>守护</td><td>与鹿<b>同排相邻</b>的己方动物<b>防御力 +2</b>（鹿本身不享受）</td></tr>
-        <tr><td class="at-name">🐸 青蛙</td><td>水域</td><td>2 / 3 / 4</td><td>跳跃</td><td>你场上每有 1 只青蛙，你<b>所有手牌的出牌费用 -1</b>。<b>可叠加</b>：2 只青蛙 -2，3 只 -3，以此类推（费用最低降到 0，不会为负）</td></tr>
-        <tr><td class="at-name">🦅 老鹰</td><td>天空</td><td>4 / 6 / 3</td><td>俯冲</td><td>攻击时<b>无视前排限制</b>，可直接攻击对方后排任意动物</td></tr>
+        <tr><td class="at-name">🐿️ 松鼠</td><td>原野</td><td>1 / 2 / 7</td><td>迅捷</td><td>本回合<b>与松鼠同列</b>（前后同一竖列）的所有己方动物<b>攻击池 +1</b>（含松鼠自身，多只叠加）</td></tr>
+        <tr><td class="at-name">🦊 狐狸</td><td>原野</td><td>3 / 3 / 8</td><td>狡诈</td><td>入场时与对方<b>随机交换 1 张手牌</b>（换来的牌会展示给你）</td></tr>
+        <tr><td class="at-name">🐸 青蛙</td><td>水域</td><td>3 / 3 / 9</td><td>跳跃</td><td>你场上每有 1 只青蛙，你<b>所有手牌费用 -1</b>（可叠加：2 只 -2、3 只 -3，最低 0）</td></tr>
+        <tr><td class="at-name">🦉 猫头鹰</td><td>天空</td><td>3 / 4 / 8</td><td>夜视</td><td>入场时<b>随机偷看对方 1 张手牌</b>，以卡牌形式展示给你看</td></tr>
+        <tr><td class="at-name">🦌 鹿</td><td>林地</td><td>4 / 5 / 9</td><td>守护</td><td>与鹿<b>同排相邻</b>的己方动物<b>防御力 +2</b>（鹿本身不享受）</td></tr>
+        <tr><td class="at-name">🦅 老鹰</td><td>天空</td><td>5 / 6 / 9</td><td>俯冲</td><td>攻击时<b>无视前排限制</b>，可直接攻击对方后排任意动物</td></tr>
+        <tr><td class="at-name">🐆 豹</td><td>原野</td><td>5 / 5 / 9</td><td>突袭</td><td><b>无视攻击顺序</b>：即使对方场上还有动物，也能<b>直接攻击英雄</b>（不会被反击）</td></tr>
+        <tr><td class="at-name">🐺 狼</td><td>林地</td><td>5 / 6 / 9</td><td>狼群突袭</td><td>本回合<b>与狼同列</b>（前后同一竖列）的所有己方动物<b>攻击池 +2</b>（含狼自身，多只叠加）</td></tr>
+        <tr><td class="at-name">🐻 熊</td><td>林地</td><td>7 / 8 / 11</td><td>蛮力</td><td>入场时从对方场上<b>随机夺走 1 只动物</b>归己方（对方动物直接消失）</td></tr>
       </tbody>
     </table>
 
-    <h3>五、联机模式</h3>
+    <h3>六、联机模式</h3>
     <ul>
-      <li>支持 <b>2 人 1v1</b> 与 <b>4 人 2v2</b>（同队共享战场、手牌与能量）。</li>
-      <li>房主可复制<b>邀请链接</b>发给朋友，朋友用手机或电脑点开链接即自动加入房间，无需手动输入房间码。</li>
-      <li>人不够时，空位由电脑自动补位；玩家掉线后由电脑托管继续对局。</li>
+      <li>支持 <b>2 人 1v1</b> 与 <b>4 人 2v2</b>（同队共享战场、手牌与能量），建房时选定对局模式。</li>
+      <li>房主可复制<b>邀请链接</b>发给朋友，手机或电脑点开链接即自动进房。</li>
+      <li>人不够时空位由电脑自动补位；玩家掉线后由电脑托管继续对局。</li>
     </ul>
 
-    <h3>六、界面图标说明</h3>
+    <h3>七、界面图标说明</h3>
     <ul>
       <li>🃏 <b>手牌数量</b>：该玩家当前手里握着的牌数。</li>
       <li>📚 <b>牌堆剩余</b>：该玩家牌堆里还没摸到的牌数。</li>
-      <li>⚡ <b>AP 行动点（费）</b>：本回合剩余的可用费用，出牌消耗它；「结束回合」旁的大数字就是你的实时费余量。</li>
-      <li>⚔ <b>攻击力</b>：攻击时造成的伤害，也是反击时还击的伤害。</li>
-      <li>🛡 <b>防御/生命</b>：动物剩余生命值，归零即离场。</li>
+      <li>⚡ <b>AP 行动点（费）</b>：本回合剩余可用费用，没用完的自动顺延到下回合（总量封顶 15，第 10 回合起每回合固定 +10）；「结束回合」旁的大数字就是你的实时费余量。</li>
+      <li>⚔ <b>攻击力</b>：牌面左下的 ⚔6 是动物的基础攻击力。</li>
+      <li>🛡 <b>防御/生命</b>：动物剩余生命值，归零即离场；绿字 = 受到鹿的守护加成。</li>
+      <li>动物左上角的<b>金色 ⚔N 徽章</b> = 本回合剩余攻击力（伤害池余量），可拆开打多个目标；变灰表示已用完。</li>
       <li>卡牌右上角的<b>彩色圆点</b> = 领地色（绿=林地、黄=原野、蓝=水域、紫=天空），集齐 3 种即胜。</li>
-      <li>动物左上角的<b>小黄点</b> = 本回合剩余攻击次数（亮点=还能攻击，灰点=已用完）。</li>
     </ul>
   </div>
 </div>
@@ -501,6 +555,11 @@
 const $ = (id) => document.getElementById(id);
 const socket = io();
 let myId = null, lobby = null, G = null, prevG = null;
+/* 情报揭示状态：夜视偷看 / 狡诈交换 */
+let intelSeenCount = 0;        // 已处理过的情报条数（yourIntel 数组游标）
+const freshCids = new Set();   // 交换到手的手牌 cid（手牌区金色高亮）
+const intelQueue = [];         // 待弹窗展示的情报队列
+let intelShowing = false;
 let selection = null;        // {kind:'play',cid} | {kind:'attack',iid} | null
 let drag = null;             // {type:'card'|'animal', cid|iid, ghost, moved, startX, startY, sourceEl}
 let justDragged = false;
@@ -509,23 +568,24 @@ const ROW_LABEL = { front: '前排', back: '后排' };
 const TERRITORY_ORDER = ['forest', 'field', 'water', 'sky'];
 const TERRITORY_COLOR = { forest: '#4f9e58', field: '#d9a441', water: '#38b2c4', sky: '#9a6fe0' };
 
-/* 8 种动物图案（emoji 彩色版本） */
+/* 9 种动物图案（emoji 彩色版本） */
 const ANIMAL_EMOJI = {
   wolf: '🐺', bear: '🐻', owl: '🦉', fox: '🦊',
-  squirrel: '🐿️', deer: '🦌', frog: '🐸', eagle: '🦅'
+  squirrel: '🐿️', deer: '🦌', frog: '🐸', eagle: '🦅', leopard: '🐆'
 };
 function animalEmoji(key) { return ANIMAL_EMOJI[key] || '🐾'; }
 
-/* 8 种动物卡牌数据（与服务端 game.js CARDS 保持一致） */
+/* 9 种动物卡牌数据（与服务端 game.js CARDS 保持一致） */
 const CARDS = {
-  wolf:     { key:'wolf',     name:'狼',     cost:4, atk:6, def:4, territory:'forest' },
-  bear:     { key:'bear',     name:'熊',     cost:6, atk:8, def:5, territory:'forest' },
-  owl:      { key:'owl',      name:'猫头鹰', cost:3, atk:4, def:3, territory:'sky' },
-  fox:      { key:'fox',      name:'狐狸',   cost:2, atk:3, def:3, territory:'field' },
-  squirrel: { key:'squirrel', name:'松鼠',   cost:1, atk:2, def:2, territory:'field' },
-  deer:     { key:'deer',     name:'鹿',     cost:4, atk:5, def:4, territory:'forest' },
-  frog:     { key:'frog',     name:'青蛙',   cost:2, atk:3, def:4, territory:'water' },
-  eagle:    { key:'eagle',    name:'老鹰',   cost:4, atk:6, def:3, territory:'sky' }
+  squirrel: { key:'squirrel', name:'松鼠',   cost:1, atk:2, def:7,  territory:'field' },
+  fox:      { key:'fox',      name:'狐狸',   cost:3, atk:3, def:8,  territory:'field' },
+  frog:     { key:'frog',     name:'青蛙',   cost:3, atk:3, def:9,  territory:'water' },
+  owl:      { key:'owl',      name:'猫头鹰', cost:3, atk:4, def:8,  territory:'sky' },
+  deer:     { key:'deer',     name:'鹿',     cost:4, atk:5, def:9,  territory:'forest' },
+  eagle:    { key:'eagle',    name:'老鹰',   cost:5, atk:6, def:9,  territory:'sky' },
+  leopard:  { key:'leopard',  name:'豹',     cost:5, atk:5, def:9,  territory:'field' },
+  wolf:     { key:'wolf',     name:'狼',     cost:5, atk:6, def:9,  territory:'forest' },
+  bear:     { key:'bear',     name:'熊',     cost:7, atk:8, def:11, territory:'forest' }
 };
 
 function showScreen(name) {
@@ -544,12 +604,26 @@ function escapeHtml(s) {
 }
 
 /* ================= 菜单 / 大厅 ================= */
+/* 模式选择：快速 / 普通 / 深度，记住上次选择 */
+let selectedMode = localStorage.getItem('forestMode') || 'normal';
+if (!['quick', 'normal', 'deep'].includes(selectedMode)) selectedMode = 'normal';
+function syncModeBtns() {
+  document.querySelectorAll('#modeRow .mode-btn').forEach((b) =>
+    b.classList.toggle('selected', b.dataset.mode === selectedMode));
+}
+document.querySelectorAll('#modeRow .mode-btn').forEach((btn) => btn.addEventListener('click', () => {
+  selectedMode = btn.dataset.mode;
+  localStorage.setItem('forestMode', selectedMode);
+  syncModeBtns();
+}));
+syncModeBtns();
+
 $('menuNick').value = localStorage.getItem('forestNick') || '';
 $('menuNick').addEventListener('change', (e) => localStorage.setItem('forestNick', e.target.value.trim().slice(0, 10)));
-$('btnAI').addEventListener('click', () => { localStorage.setItem('forestNick', nickValue()); socket.emit('start_ai', { nickname: nickValue() }); });
+$('btnAI').addEventListener('click', () => { localStorage.setItem('forestNick', nickValue()); socket.emit('start_ai', { nickname: nickValue(), mode: selectedMode }); });
 document.querySelectorAll('[data-cap]').forEach((btn) => btn.addEventListener('click', () => {
   localStorage.setItem('forestNick', nickValue());
-  socket.emit('create_room', { nickname: nickValue(), maxPlayers: Number(btn.dataset.cap) });
+  socket.emit('create_room', { nickname: nickValue(), maxPlayers: Number(btn.dataset.cap), mode: selectedMode });
 }));
 $('menuCode').addEventListener('input', (e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6); });
 $('btnJoin').addEventListener('click', () => {
@@ -581,7 +655,8 @@ function renderLobby() {
   $('lobbyCode').textContent = lobby.code;
   $('inviteLink').value = `${location.origin}/?room=${lobby.code}`;
   const is4 = lobby.maxPlayers === 4;
-  $('lobbyCapacity').textContent = is4 ? '4 人房 · 2v2 组队对战' : '2 人房 · 1v1';
+  const modeLabel = lobby.modeName ? ` · ${lobby.modeName}模式（${lobby.mode==='quick'?20:lobby.mode==='deep'?60:40}能量）` : '';
+  $('lobbyCapacity').textContent = (is4 ? '4 人房 · 2v2 组队对战' : '2 人房 · 1v1') + modeLabel;
   const seatsEl = $('seats'); seatsEl.innerHTML = '';
   for (let i = 0; i < lobby.maxPlayers; i++) {
     const p = lobby.players[i];
@@ -634,6 +709,8 @@ $('btnLeaveLobby').addEventListener('click', backToMenu);
 function backToMenu() {
   socket.emit('leave_room');
   lobby = null; G = null; prevG = null; selection = null;
+  intelSeenCount = 0; freshCids.clear(); intelQueue.length = 0; intelShowing = false;
+  $('intelReveal').classList.remove('show');
   $('resultLayer').classList.remove('show');
   showScreen('menu');
 }
@@ -641,6 +718,8 @@ function backToMenu() {
 /* ================= 对局网络事件 ================= */
 socket.on('game_start', (snap) => {
   G = snap; prevG = null; selection = null;
+  intelSeenCount = 0; freshCids.clear(); intelQueue.length = 0; intelShowing = false;
+  $('intelReveal').classList.remove('show');
   $('resultLayer').classList.remove('show');
   showScreen('game');
   renderGame();
@@ -678,7 +757,7 @@ function meTeam() { return G.me; }
 function foeTeam() { return G.foe; }
 function mePlayer() { return G.players.find((p) => p.id === myId); }
 
-function apPips(ap) { let h=''; for (let i=1;i<=10;i++) h += `<span class="pip ${i<=ap?'on':''}"></span>`; return h; }
+function apPips(ap) { let h=''; for (let i=1;i<=15;i++) h += `<span class="pip ${i<=ap?'on':''}"></span>`; return h; }
 function colorDots(team) {
   const have = new Set(team.colors.map((c) => c.key));
   return TERRITORY_ORDER.map((k) => {
@@ -731,12 +810,13 @@ function animalTile(a, ownerIsMe) {
   const ready = ownerIsMe && myTurn && a.canAttack;
   const movable = ownerIsMe && myTurn && (a.canMove || a.canUndo);
   const buffed = a.def > a.baseDef;
-  const acts = [];
-  for (let i = 0; i < a.perTurn; i++) acts.push(`<span class="act-dot ${i >= a.attacksLeft ? 'spent' : ''}"></span>`);
+  const poolTag = a.poolLeft > 0
+    ? `<span class="pool-badge" title="本回合剩余攻击力（可分多次攻击）">⚔${a.poolLeft}</span>`
+    : '<span class="pool-badge empty" title="攻击力已用完">⚔0</span>';
   const remain = a.def - a.dmg;
   return `<div class="animal ${ownerIsMe?'mine':'foe'} ${ready?'ready':''} ${movable?'movable':''} ${selected?'selected':''} ${targetable?'targetable':''}"
-            data-iid="${a.iid}" style="--c:${a.bodyColor}" title="${escapeHtml(a.name)} · ${escapeHtml(a.ability)}">
-            <span class="acts">${acts.join('')}</span>
+            data-iid="${a.iid}" style="--c:${a.bodyColor}" title="${escapeHtml(a.name)} · ${escapeHtml(a.ability)}（剩余攻击力${a.poolLeft}/${a.poolMax}）">
+            ${poolTag}
             <span class="gem" style="background:${a.territoryColor}"></span>
             <span class="emoji">${animalEmoji(a.cid)}</span>
             <span class="an-name">${escapeHtml(a.name)}</span>
@@ -763,7 +843,7 @@ function renderHand() {
     const playable = myTurn && c.playable;
     const selected = selection && selection.kind === 'play' && selection.cid === c.cid;
     const reduced = c.cost < c.baseCost;
-    return `<div class="hcard ${playable?'playable':'unplayable'} ${selected?'selected':''}" data-cid="${c.cid}">
+    return `<div class="hcard ${playable?'playable':'unplayable'} ${selected?'selected':''} ${freshCids.has(c.cid)?'fresh':''}" data-cid="${c.cid}">
         <span class="cost ${reduced?'reduced':''}">${c.cost}${reduced?`<span class="base">${c.baseCost}</span>`:''}</span>
         <span class="gem" style="background:${c.territoryColor}"></span>
         <div class="art" style="background:linear-gradient(180deg,${c.bodyColor}44,transparent)">
@@ -802,6 +882,49 @@ function renderLog() {
   $('logBox').innerHTML = intel.join('') + lines.join('');
   $('logBox').scrollTop = $('logBox').scrollHeight;
 }
+
+/* ================= 情报揭示：偷看/交换 → 卡牌大图 + 手牌高亮 ================= */
+function checkNewIntel() {
+  const arr = (G && G.yourIntel) || [];
+  if (intelSeenCount > arr.length) intelSeenCount = 0;   // 新一局/数组被截断
+  while (intelSeenCount < arr.length) {
+    const it = arr[intelSeenCount++];
+    if (it.cid != null) freshCids.add(it.cid);           // 交换到手 → 手牌区持续金色高亮
+    if (it.cardKey) intelQueue.push(it);                 // 有具体卡牌 → 大图弹窗
+  }
+  // 清理已不在手牌中的高亮 cid（被打出或被换走）
+  const inHand = new Set((G.yourHand || []).map((c) => c.cid));
+  for (const cid of [...freshCids]) if (!inHand.has(cid)) freshCids.delete(cid);
+  if (!intelShowing && intelQueue.length) showNextIntel();
+}
+
+function showNextIntel() {
+  const it = intelQueue.shift();
+  if (!it) { intelShowing = false; return; }
+  intelShowing = true;
+  const c = CARDS[it.cardKey];
+  if (!c) { showNextIntel(); return; }
+  $('irTitle').textContent = `🔒 ${it.text}`;
+  $('irCardWrap').innerHTML = `<div class="hcard" style="pointer-events:none;cursor:default">
+      <span class="cost">${c.cost}</span>
+      <span class="gem" style="background:${TERRITORY_COLOR[c.territory]}"></span>
+      <div class="art" style="background:linear-gradient(180deg,${c.bodyColor}44,transparent)">
+        <span class="emoji">${animalEmoji(c.key)}</span>
+        <span class="nm">${escapeHtml(c.name)}</span>
+      </div>
+      <div class="skill"><b>${escapeHtml(c.ability)}</b>${escapeHtml(c.abilityDesc)}</div>
+      <span class="stats"><span class="s-atk">⚔${c.atk}</span><span class="s-def">🛡${c.def}</span></span>
+    </div>`;
+  $('intelReveal').classList.add('show');
+  clearTimeout(showNextIntel._t);
+  showNextIntel._t = setTimeout(closeIntelReveal, 5000);
+}
+function closeIntelReveal() {
+  clearTimeout(showNextIntel._t);
+  $('intelReveal').classList.remove('show');
+  setTimeout(() => { if (intelQueue.length) showNextIntel(); else intelShowing = false; }, 220);
+}
+$('intelReveal').addEventListener('click', closeIntelReveal);
 
 /* ================= 动画触发（基于快照 diff） ================= */
 function triggerAnimations() {
@@ -872,6 +995,7 @@ function renderGame() {
   renderRow('foeFront', foe.board.front, false, 'front');
   renderRow('myFront', me.board.front, true, 'front');
   renderRow('myBack', me.board.back, true, 'back');
+  checkNewIntel();
   renderHand();
   renderLog();
   renderPlayerList();
@@ -1050,7 +1174,7 @@ $('foeHero').addEventListener('click', (e) => {
   if (atkA && atkA.heroLegal) {
     const atkIid = selection.iid;
     selection = null; renderGame(); act({ action: 'attack', iid: atkIid, target: 'hero' });
-  } else toast('对方前排还有动物，不能直接攻击英雄（老鹰可俯冲）');
+  } else toast('对方场上还有动物，必须先攻击动物（🐆豹「突袭」可直击英雄）');
 });
 
 $('btnEnd').addEventListener('click', () => { if (G && G.activeId === myId) { selection = null; act({ action: 'end_turn' }); } });
@@ -1059,7 +1183,7 @@ $('btnEnd').addEventListener('click', () => { if (G && G.activeId === myId) { se
 function showResultLayer() {
   if (!G || G.phase !== 'over') return;
   const verdict = $('resultVerdict');
-  const reasonMap = { energy: '森林能量归零，对决结束', territory: '集齐 3 种领地色，称霸森林！', turn: '40 个回合已满，按剩余能量裁决' };
+  const reasonMap = { energy: '森林能量归零，对决结束', territory: '集齐 3 种领地色，称霸森林！', turn: `${G.maxTurns} 个回合已满，按剩余能量裁决` };
   const myTeamKey = G.myTeam;
   const iWin = G.winnerTeam === myTeamKey;
   if (G.winnerTeam === null) { verdict.textContent = '平 局'; verdict.className = 'result-verdict draw'; }
