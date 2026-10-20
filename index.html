@@ -359,7 +359,7 @@
       <button class="mode-btn" data-mode="deep">🏞️ 深度<small>60 能量 · 约15分钟</small></button>
     </div>
     <button class="btn btn-leaf" id="btnAI">VS AI 单机对战</button>
-    <div class="divider">在线联机（P2P 直连）</div>
+    <div class="divider">在线联机（P2P 直连）<span style="color:#7fa883;font-size:11px;font-weight:normal;margin-left:8px">版本 v4.1</span></div>
     <div class="btn-row" style="margin-bottom:10px">
       <button class="btn btn-gold" data-cap="2">创建 2 人房</button>
       <button class="btn btn-gold" data-cap="4">创建 4 人房</button>
@@ -369,7 +369,7 @@
       <input id="menuCode" class="code" maxlength="6" inputmode="numeric" placeholder="6 位房间码">
     </div>
     <button class="btn btn-ghost" id="btnJoin">加入房间</button>
-    <div style="text-align:center;color:#9fc5a3;font-size:12px;margin-top:6px">🌐 免服务器 P2P 直连：房主需保持页面打开，朋友点邀请链接即可加入</div>
+    <div style="text-align:center;color:#9fc5a3;font-size:12px;margin-top:6px">🌐 免服务器 P2P 直连：房主需保持页面打开，朋友点邀请链接即可加入<br>进不去时：双方都用<b>无痕/隐私窗口</b>重新打开本链接（避免旧缓存）</div>
     <div class="menu-rules">
       三种模式：<b>快速 20</b> / <b>普通 40</b> / <b>深度 60</b> 点森林能量，归零即败；先集齐 <b>3 种领地色</b> 动物也获胜<br>
       <b>每回合开始摸 2 张牌</b>（手牌上限 8 张）<br>
@@ -1588,7 +1588,7 @@ const socket = (() => {
     let joined = false;
     joinTimer = setTimeout(() => {
       if (!joined) {
-        fire('error_msg', { message: '连不上房主（P2P 直连被网络限制）。请确认：① 房主页面还开着 ② 你们用的是同一个链接版本（GitHub Pages 版）③ 重试一次' });
+        fire('error_msg', { message: '连不上房主（P2P 直连被网络限制）。请试：① 双方都用无痕窗口重开链接再试一次 ② 房主换手机热点重建房间 ③ 改用 ngrok 版链接联机（最稳定）' });
         try { peer.destroy(); } catch (e) {}
         role = 'idle';
       }
